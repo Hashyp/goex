@@ -2,13 +2,6 @@ package main
 
 import "github.com/evertras/bubble-table/table"
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (m *Model) resize(width, height int) {
 	m.width = width
 	m.height = height
@@ -16,7 +9,7 @@ func (m *Model) resize(width, height int) {
 }
 
 func (m *Model) paneHeight() int {
-	return maxInt(1, m.height)
+	return max(1, m.height)
 }
 
 func (m *Model) applyLayout() {
@@ -24,7 +17,7 @@ func (m *Model) applyLayout() {
 		return
 	}
 
-	paneWidth := maxInt(30, m.width/2)
+	paneWidth := max(30, m.width/2)
 	paneHeight := m.paneHeight()
 
 	m.leftPane.table = table.Model.WithTargetWidth(m.leftPane.table, paneWidth)
