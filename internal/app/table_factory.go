@@ -5,6 +5,13 @@ import (
 	"github.com/evertras/bubble-table/table"
 )
 
+const (
+	nameColumnFlexWidth = 20
+	sizeColumnWidth     = 5
+	dateColumnWidth     = 10
+	timeColumnWidth     = 8
+)
+
 var customBorder = table.Border{
 	Top:    "─",
 	Left:   "│",
@@ -27,10 +34,10 @@ var customBorder = table.Border{
 
 func createTable(rows []table.Row, theme appTheme, selected map[string]bool) table.Model {
 	flexColumns := []table.Column{
-		table.NewFlexColumn(columnKeyName, "Name", 20).WithStyle(lipgloss.NewStyle().Align(lipgloss.Left)),
-		table.NewColumn(columnKeySize, "Size", 5).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
-		table.NewColumn(columnKeyDate, "Date", 10).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
-		table.NewColumn(columnKeyTime, "Time", 8).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
+		table.NewFlexColumn(columnKeyName, "Name", nameColumnFlexWidth).WithStyle(lipgloss.NewStyle().Align(lipgloss.Left)),
+		table.NewColumn(columnKeySize, "Size", sizeColumnWidth).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
+		table.NewColumn(columnKeyDate, "Date", dateColumnWidth).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
+		table.NewColumn(columnKeyTime, "Time", timeColumnWidth).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
 	}
 
 	keys := table.DefaultKeyMap()

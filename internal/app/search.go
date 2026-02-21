@@ -9,12 +9,17 @@ import (
 	"github.com/evertras/bubble-table/table"
 )
 
+const (
+	searchInputCharLimit = 256
+	searchInputWidth     = 48
+)
+
 func newSearchInput() textinput.Model {
 	input := textinput.New()
 	input.Prompt = "regex> "
 	input.Placeholder = "type regular expression"
-	input.CharLimit = 256
-	input.Width = 48
+	input.CharLimit = searchInputCharLimit
+	input.Width = searchInputWidth
 	return input
 }
 
