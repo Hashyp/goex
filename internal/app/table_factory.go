@@ -44,8 +44,7 @@ func createTable(rows []table.Row, theme appTheme, selected map[string]bool) tab
 			WithKeyMap(keys).
 			WithStaticFooter("Footer!").
 			WithNoPagination().
-			WithBaseStyle(lipgloss.NewStyle().Align(lipgloss.Left)).
-			SortByAsc(columnKeyNameRaw),
+			WithBaseStyle(lipgloss.NewStyle().Align(lipgloss.Left)),
 		theme,
 		selected,
 	)

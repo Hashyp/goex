@@ -86,13 +86,19 @@ func (p *Pane) enterHighlightedDirectory(fs FileSystem, theme appTheme) error {
 }
 
 func (p *Pane) goParent(fs FileSystem, theme appTheme) error {
+	childName := filepath.Base(p.path)
 	parent := filepath.Dir(p.path)
 	if parent == p.path {
 		return nil
 	}
 
 	p.path = parent
-	return p.reload(fs, theme)
+	if err := p.reload(fs, theme); err != nil {
+		return err
+	}
+
+	p.highlightByName(childName)
+	return nil
 }
 
 func (p *Pane) isSelected(name string) bool {
@@ -153,4 +159,17 @@ func (p *Pane) jumpToSearchMatch(next bool) bool {
 
 	p.table = p.table.WithHighlightedRow(target)
 	return true
+}
+
+func (p *Pane) highlightByName(name string) {
+	if name == "" {
+		return
+	}
+
+	for index, row := range p.table.GetVisibleRows() {
+		if rowNameFromData(row.Data) == name {
+			p.table = p.table.WithHighlightedRow(index)
+			return
+		}
+	}
 }

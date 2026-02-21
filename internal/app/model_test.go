@@ -275,6 +275,59 @@ func TestSearchDoesNotReorderRows(t *testing.T) {
 	}
 }
 
+func TestRowsShowDirectoriesBeforeFiles(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"zeta", "alpha"} {
+		if err := os.Mkdir(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+	for _, file := range []string{"beta.txt", "aardvark.txt"} {
+		if err := os.WriteFile(filepath.Join(root, file), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	got := visibleNames(model.leftPane.table.GetVisibleRows())
+	want := []string{"alpha", "zeta", "aardvark.txt", "beta.txt"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("unexpected ordering: got=%v want=%v", got, want)
+	}
+}
+
+func TestBackToParentHighlightsVisitedDirectory(t *testing.T) {
+	root := t.TempDir()
+	targetDir := filepath.Join(root, "alpha")
+	if err := os.Mkdir(targetDir, 0o755); err != nil {
+		t.Fatalf("mkdir alpha: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "beta.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "inside.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	if got := model.leftPane.highlightedName(); got != "alpha" {
+		t.Fatalf("expected initial highlight to be alpha, got %q", got)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if model.leftPane.path != targetDir {
+		t.Fatalf("expected to enter %q, got %q", targetDir, model.leftPane.path)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	if model.leftPane.path != root {
+		t.Fatalf("expected to return to %q, got %q", root, model.leftPane.path)
+	}
+	if got := model.leftPane.highlightedName(); got != "alpha" {
+		t.Fatalf("expected highlight restored to alpha, got %q", got)
+	}
+}
+
 func visibleNames(rows []table.Row) []string {
 	names := make([]string, 0, len(rows))
 	for _, row := range rows {
