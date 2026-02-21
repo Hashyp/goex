@@ -31,7 +31,8 @@ func (m *Model) applyTheme() {
 }
 
 func (m *Model) toggleTheme() {
-	m.theme = nextTheme(m.theme.name)
+	m.themeIndex = nextThemeIndex(m.themeIndex)
+	m.theme = themes[m.themeIndex]
 	m.applyTheme()
 }
 

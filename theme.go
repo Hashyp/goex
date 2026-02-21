@@ -74,20 +74,20 @@ var (
 		selectedBG:  lipgloss.Color("#434c5e"),
 		selectedFG:  lipgloss.Color("#88c0d0"),
 	}
+
+	themes = []appTheme{
+		catppuccinMocha,
+		catppuccinLatte,
+		catppuccinFrappe,
+		catppuccinMacchiato,
+		nord,
+	}
 )
 
-func nextTheme(themeName string) appTheme {
-	if themeName == catppuccinMocha.name {
-		return catppuccinLatte
+func nextThemeIndex(current int) int {
+	if len(themes) == 0 {
+		return 0
 	}
-	if themeName == catppuccinLatte.name {
-		return catppuccinFrappe
-	}
-	if themeName == catppuccinFrappe.name {
-		return catppuccinMacchiato
-	}
-	if themeName == catppuccinMacchiato.name {
-		return nord
-	}
-	return catppuccinMocha
+
+	return (current + 1) % len(themes)
 }

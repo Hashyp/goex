@@ -18,6 +18,7 @@ type Model struct {
 	leftPane   Pane
 	rightPane  Pane
 	activePane activePane
+	themeIndex int
 	theme      appTheme
 	status     string
 	width      int
@@ -34,7 +35,8 @@ func NewModel() Model {
 }
 
 func NewModelWithFS(fs FileSystem, startPath string) Model {
-	theme := catppuccinMocha
+	themeIndex := 0
+	theme := themes[themeIndex]
 	leftPane, leftErr := newPane(fs, startPath, theme)
 	rightPane, rightErr := newPane(fs, startPath, theme)
 	status := ""
@@ -50,6 +52,7 @@ func NewModelWithFS(fs FileSystem, startPath string) Model {
 		leftPane:   leftPane,
 		rightPane:  rightPane,
 		activePane: paneLeft,
+		themeIndex: themeIndex,
 		theme:      theme,
 		status:     status,
 	}
