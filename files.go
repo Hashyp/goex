@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	columnKeyName = "name"
-	columnKeySize = "size"
-	columnKeyDate = "date"
-	columnKeyTime = "time"
+	columnKeyName    = "name"
+	columnKeyNameRaw = "__name_raw"
+	columnKeySize    = "size"
+	columnKeyDate    = "date"
+	columnKeyTime    = "time"
 )
 
 func formatSize(bytes int64) string {
@@ -53,10 +54,11 @@ func getDirAndFiles(fs FileSystem, path string) ([]table.Row, error) {
 		}
 
 		rows = append(rows, table.NewRow(table.RowData{
-			columnKeyName: entry.Name(),
-			columnKeySize: size,
-			columnKeyDate: modTime.Format("2006-01-02"),
-			columnKeyTime: modTime.Format("15:04:05"),
+			columnKeyName:    entry.Name(),
+			columnKeyNameRaw: entry.Name(),
+			columnKeySize:    size,
+			columnKeyDate:    modTime.Format("2006-01-02"),
+			columnKeyTime:    modTime.Format("15:04:05"),
 		}))
 	}
 

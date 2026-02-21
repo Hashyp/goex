@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -14,15 +15,18 @@ const (
 )
 
 type Model struct {
-	fs         FileSystem
-	leftPane   Pane
-	rightPane  Pane
-	activePane activePane
-	themeIndex int
-	theme      appTheme
-	status     string
-	width      int
-	height     int
+	fs                 FileSystem
+	leftPane           Pane
+	rightPane          Pane
+	activePane         activePane
+	themeIndex         int
+	theme              appTheme
+	status             string
+	width              int
+	height             int
+	searchModalVisible bool
+	searchInput        textinput.Model
+	searchTargetPane   activePane
 }
 
 func NewModel() Model {
@@ -48,13 +52,16 @@ func NewModelWithFS(fs FileSystem, startPath string) Model {
 	}
 
 	model := Model{
-		fs:         fs,
-		leftPane:   leftPane,
-		rightPane:  rightPane,
-		activePane: paneLeft,
-		themeIndex: themeIndex,
-		theme:      theme,
-		status:     status,
+		fs:                 fs,
+		leftPane:           leftPane,
+		rightPane:          rightPane,
+		activePane:         paneLeft,
+		themeIndex:         themeIndex,
+		theme:              theme,
+		status:             status,
+		searchModalVisible: false,
+		searchInput:        newSearchInput(),
+		searchTargetPane:   paneLeft,
 	}
 
 	model.setActivePane(paneLeft)

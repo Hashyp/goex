@@ -3,9 +3,12 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/evertras/bubble-table/table"
 )
 
 func pressKey(t *testing.T, model Model, key tea.KeyMsg) Model {
@@ -136,4 +139,151 @@ func TestSpaceSelectsAndMovesToNextRow(t *testing.T) {
 	if got := model.leftPane.table.GetHighlightedRowIndex(); got != 1 {
 		t.Fatalf("expected highlight to move to index 1, got %d", got)
 	}
+}
+
+func TestSearchModalApplyHighlightsAndNavigateMatches(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"alpha.txt", "beta.txt", "omega.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !model.searchModalVisible {
+		t.Fatal("expected search modal to be visible")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.searchModalVisible {
+		t.Fatal("expected search modal to be hidden after enter")
+	}
+	if model.leftPane.searchRegex == nil {
+		t.Fatal("expected compiled regex to be set")
+	}
+	if len(model.leftPane.matchIndexes) != 1 {
+		t.Fatalf("expected one match, got %d", len(model.leftPane.matchIndexes))
+	}
+
+	var foundStyled bool
+	for _, row := range model.leftPane.table.GetVisibleRows() {
+		if rowNameFromData(row.Data) != "beta.txt" {
+			continue
+		}
+
+		cell, ok := row.Data[columnKeyName].(table.StyledCell)
+		if !ok {
+			t.Fatal("expected matched row name to be styled")
+		}
+		rendered, _ := cell.Data.(string)
+		if !strings.Contains(rendered, "be") || !strings.Contains(rendered, "ta") || !strings.Contains(rendered, ".txt") {
+			t.Fatal("expected rendered text to include matching and non-matching segments")
+		}
+		foundStyled = true
+	}
+	if !foundStyled {
+		t.Fatal("expected to find styled matching row")
+	}
+
+	start := model.leftPane.table.GetHighlightedRowIndex()
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if got := model.leftPane.table.GetHighlightedRowIndex(); got != start {
+		t.Fatalf("expected single-match navigation to remain at %d, got %d", start, got)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
+	if got := model.leftPane.table.GetHighlightedRowIndex(); got != start {
+		t.Fatalf("expected reverse single-match navigation to remain at %d, got %d", start, got)
+	}
+}
+
+func TestEscapeClearsSearchHighlights(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"alpha.txt", "beta.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.leftPane.searchRegex == nil {
+		t.Fatal("expected search to be active before escape")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if model.leftPane.searchRegex != nil {
+		t.Fatal("expected search regex to be cleared")
+	}
+	if len(model.leftPane.matchIndexes) != 0 {
+		t.Fatalf("expected no match indexes after clear, got %d", len(model.leftPane.matchIndexes))
+	}
+
+	for _, row := range model.leftPane.table.GetVisibleRows() {
+		if _, ok := row.Data[columnKeyName].(table.StyledCell); ok {
+			t.Fatal("expected no styled name cells after clearing search")
+		}
+	}
+}
+
+func TestEscapeInSearchModalCancelsModal(t *testing.T) {
+	model := NewModelWithFS(OSFileSystem{}, t.TempDir())
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !model.searchModalVisible {
+		t.Fatal("expected modal to open")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if model.searchModalVisible {
+		t.Fatal("expected modal to close on escape")
+	}
+	if model.leftPane.searchRegex != nil {
+		t.Fatal("expected search to remain inactive after cancel")
+	}
+}
+
+func TestSearchDoesNotReorderRows(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"zzz.txt", "alpha.txt", "middle.txt", "beta.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	before := visibleNames(model.leftPane.table.GetVisibleRows())
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	after := visibleNames(model.leftPane.table.GetVisibleRows())
+	if !slices.Equal(before, after) {
+		t.Fatalf("expected row order unchanged, before=%v after=%v", before, after)
+	}
+}
+
+func visibleNames(rows []table.Row) []string {
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		name := rowNameFromData(row.Data)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+
+	return names
 }

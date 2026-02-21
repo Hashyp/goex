@@ -45,7 +45,7 @@ func createTable(rows []table.Row, theme appTheme, selected map[string]bool) tab
 			WithStaticFooter("Footer!").
 			WithNoPagination().
 			WithBaseStyle(lipgloss.NewStyle().Align(lipgloss.Left)).
-			SortByAsc(columnKeyName),
+			SortByAsc(columnKeyNameRaw),
 		theme,
 		selected,
 	)
@@ -55,7 +55,7 @@ func applyThemeToTable(t table.Model, theme appTheme, selected map[string]bool) 
 	return t.
 		HeaderStyle(lipgloss.NewStyle().Foreground(theme.header).Bold(true)).
 		WithRowStyleFunc(func(input table.RowStyleFuncInput) lipgloss.Style {
-			name, _ := input.Row.Data[columnKeyName].(string)
+			name := rowNameFromData(input.Row.Data)
 			if input.IsHighlighted {
 				return lipgloss.NewStyle().
 					Foreground(theme.highlightFG).
