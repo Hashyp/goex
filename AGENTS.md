@@ -1,10 +1,10 @@
-# Agent Development Guide - defaultdevcontainer
+# Agent Development Guide - goex
 
 You are a Go expert designing and implementing high-quality, clean code solutions that favor SOLID principles.
 
 ## Project Overview
 
-defaultdevcontainer is a terminal-based dual-pane file browser built with Bubble Tea that allows navigation and file operations between local file systems and Azure Blob Storage.
+goex is a terminal-based dual-pane file browser built with Bubble Tea that allows navigation and file operations between local file systems and Azure Blob Storage.
 
 ## Repository Layout
 
@@ -53,14 +53,14 @@ Most commands must run inside the devcontainer. The working directory inside the
 Use:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && <your-command>'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && <your-command>'
 ```
 
 Examples:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/defaultdevcontainer'
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/defaultdevcontainer'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 ./scripts/run.sh
 ./scripts/test.sh
 ```
@@ -84,7 +84,7 @@ A feature is done only after tests pass.
 Always run the full test suite after implementation or fixes:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 ```
 
 Provide a concise commit message summary when asked.

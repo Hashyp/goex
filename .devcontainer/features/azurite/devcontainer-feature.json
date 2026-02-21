@@ -1,0 +1,9 @@
+{
+	"id": "azurite",
+	"version": "1.0.0",
+	"name": "azurite",
+	"description": "Installs Azurite emulator globally via npm.",
+	"installsAfter": [
+		"./features/ripgrep"
+	]
+}
