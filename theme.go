@@ -1,0 +1,81 @@
+package main
+
+import "github.com/charmbracelet/lipgloss"
+
+type appTheme struct {
+	name        string
+	header      lipgloss.Color
+	border      lipgloss.Color
+	text        lipgloss.Color
+	missing     lipgloss.Color
+	highlightBG lipgloss.Color
+	highlightFG lipgloss.Color
+}
+
+var (
+	catppuccinMocha = appTheme{
+		name:        "mocha",
+		header:      lipgloss.Color("#74c7ec"),
+		border:      lipgloss.Color("#585b70"),
+		text:        lipgloss.Color("#cdd6f4"),
+		missing:     lipgloss.Color("#f38ba8"),
+		highlightBG: lipgloss.Color("#89b4fa"),
+		highlightFG: lipgloss.Color("#1e1e2e"),
+	}
+
+	catppuccinLatte = appTheme{
+		name:        "latte",
+		header:      lipgloss.Color("#209fb5"),
+		border:      lipgloss.Color("#acb0be"),
+		text:        lipgloss.Color("#4c4f69"),
+		missing:     lipgloss.Color("#d20f39"),
+		highlightBG: lipgloss.Color("#1e66f5"),
+		highlightFG: lipgloss.Color("#eff1f5"),
+	}
+
+	catppuccinFrappe = appTheme{
+		name:        "frappe",
+		header:      lipgloss.Color("#85c1dc"),
+		border:      lipgloss.Color("#737994"),
+		text:        lipgloss.Color("#c6d0f5"),
+		missing:     lipgloss.Color("#e78284"),
+		highlightBG: lipgloss.Color("#8caaee"),
+		highlightFG: lipgloss.Color("#303446"),
+	}
+
+	catppuccinMacchiato = appTheme{
+		name:        "macchiato",
+		header:      lipgloss.Color("#91d7e3"),
+		border:      lipgloss.Color("#6e738d"),
+		text:        lipgloss.Color("#cad3f5"),
+		missing:     lipgloss.Color("#ed8796"),
+		highlightBG: lipgloss.Color("#8aadf4"),
+		highlightFG: lipgloss.Color("#24273a"),
+	}
+
+	nord = appTheme{
+		name:        "nord",
+		header:      lipgloss.Color("#88c0d0"),
+		border:      lipgloss.Color("#4c566a"),
+		text:        lipgloss.Color("#e5e9f0"),
+		missing:     lipgloss.Color("#bf616a"),
+		highlightBG: lipgloss.Color("#5e81ac"),
+		highlightFG: lipgloss.Color("#eceff4"),
+	}
+)
+
+func nextTheme(themeName string) appTheme {
+	if themeName == catppuccinMocha.name {
+		return catppuccinLatte
+	}
+	if themeName == catppuccinLatte.name {
+		return catppuccinFrappe
+	}
+	if themeName == catppuccinFrappe.name {
+		return catppuccinMacchiato
+	}
+	if themeName == catppuccinMacchiato.name {
+		return nord
+	}
+	return catppuccinMocha
+}
