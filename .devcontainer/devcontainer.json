@@ -14,7 +14,7 @@
 	"runArgs": [
 		"--name=goex"
 	],
-	"postCreateCommand": "bash -lc 'set -e; npm install -g azurite; touch ~/.bash_aliases; grep -q \"alias goex=\\\"go run ./cmd/goex\\\"\" ~/.bash_aliases || echo \"alias goex=\\\"go run ./cmd/goex\\\"\" >> ~/.bash_aliases; grep -q \"source ~/.bash_aliases\" ~/.bashrc || echo \"source ~/.bash_aliases\" >> ~/.bashrc'",
+	"postCreateCommand": "bash -lc 'set -e; touch ~/.bash_aliases; grep -q \"alias goex=\\\"go run ./cmd/goex\\\"\" ~/.bash_aliases || echo \"alias goex=\\\"go run ./cmd/goex\\\"\" >> ~/.bash_aliases; grep -q \"source ~/.bash_aliases\" ~/.bashrc || echo \"source ~/.bash_aliases\" >> ~/.bashrc'",
 	"postStartCommand": "bash -lc 'mkdir -p /tmp/azurite; pgrep -f \"azurite.*--location /tmp/azurite\" >/dev/null || nohup azurite --location /tmp/azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 >/tmp/azurite/azurite.log 2>&1 &'",
 	"forwardPorts": [10000, 10001, 10002],
 	"customizations": {

@@ -4,6 +4,6 @@
 	"name": "azurite",
 	"description": "Installs Azurite emulator globally via npm.",
 	"installsAfter": [
-		"./features/ripgrep"
+		"ripgrep"
 	]
 }
