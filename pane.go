@@ -7,22 +7,26 @@ import (
 )
 
 type Pane struct {
-	path  string
-	table table.Model
+	path     string
+	table    table.Model
+	selected map[string]bool
 }
 
 func newPane(fs FileSystem, path string, theme appTheme) (Pane, error) {
+	selected := map[string]bool{}
 	rows, err := getDirAndFiles(fs, path)
 	if err != nil {
 		return Pane{
-			path:  path,
-			table: createTable([]table.Row{}, theme),
+			path:     path,
+			table:    createTable([]table.Row{}, theme, selected),
+			selected: selected,
 		}, err
 	}
 
 	return Pane{
-		path:  path,
-		table: createTable(rows, theme),
+		path:     path,
+		table:    createTable(rows, theme, selected),
+		selected: selected,
 	}, nil
 }
 
@@ -74,4 +78,18 @@ func (p *Pane) goParent(fs FileSystem) error {
 
 	p.path = parent
 	return p.reload(fs)
+}
+
+func (p *Pane) isSelected(name string) bool {
+	return p.selected[name]
+}
+
+func (p *Pane) toggleHighlightedSelection() bool {
+	name := p.highlightedName()
+	if name == "" {
+		return false
+	}
+
+	p.selected[name] = !p.selected[name]
+	return true
 }

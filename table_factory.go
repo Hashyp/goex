@@ -25,7 +25,7 @@ var customBorder = table.Border{
 	InnerDivider: "│",
 }
 
-func createTable(rows []table.Row, theme appTheme) table.Model {
+func createTable(rows []table.Row, theme appTheme, selected map[string]bool) table.Model {
 	flexColumns := []table.Column{
 		table.NewFlexColumn(columnKeyName, "Name", 20).WithStyle(lipgloss.NewStyle().Align(lipgloss.Left)),
 		table.NewColumn(columnKeySize, "Size", 5).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)),
@@ -36,32 +36,40 @@ func createTable(rows []table.Row, theme appTheme) table.Model {
 	keys := table.DefaultKeyMap()
 	keys.RowDown.SetKeys("j", "down", "s")
 	keys.RowUp.SetKeys("k", "up", "w")
-	keys.RowSelectToggle.SetKeys(" ")
 
 	return applyThemeToTable(
 		table.New(flexColumns).
 			WithRows(rows).
-			SelectableRows(true).
 			Border(customBorder).
 			WithKeyMap(keys).
 			WithStaticFooter("Footer!").
 			WithNoPagination().
-			WithSelectedText(" ", "✓").
 			WithBaseStyle(lipgloss.NewStyle().Align(lipgloss.Left)).
 			SortByAsc(columnKeyName),
 		theme,
+		selected,
 	)
 }
 
-func applyThemeToTable(t table.Model, theme appTheme) table.Model {
+func applyThemeToTable(t table.Model, theme appTheme, selected map[string]bool) table.Model {
 	return t.
 		HeaderStyle(lipgloss.NewStyle().Foreground(theme.header).Bold(true)).
-		HighlightStyle(
-			lipgloss.NewStyle().
-				Foreground(theme.highlightFG).
-				Background(theme.highlightBG).
-				Bold(true),
-		).
+		WithRowStyleFunc(func(input table.RowStyleFuncInput) lipgloss.Style {
+			name, _ := input.Row.Data[columnKeyName].(string)
+			if input.IsHighlighted {
+				return lipgloss.NewStyle().
+					Foreground(theme.highlightFG).
+					Background(theme.highlightBG).
+					Bold(true)
+			}
+			if selected[name] {
+				return lipgloss.NewStyle().
+					Foreground(theme.selectedFG).
+					Background(theme.selectedBG).
+					Bold(true)
+			}
+			return lipgloss.NewStyle()
+		}).
 		Border(customBorder).
 		WithBaseStyle(
 			lipgloss.NewStyle().

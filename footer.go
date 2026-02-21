@@ -15,10 +15,24 @@ func paneFooter(path string, highlightedName string) string {
 }
 
 func (m *Model) updateFooter() {
+	leftSelected := selectedCount(m.leftPane.selected)
+	rightSelected := selectedCount(m.rightPane.selected)
+
 	m.leftPane.table = m.leftPane.table.WithStaticFooter(
-		paneFooter(m.leftPane.path, m.leftPane.highlightedName()),
+		fmt.Sprintf("%s | selected: %d", paneFooter(m.leftPane.path, m.leftPane.highlightedName()), leftSelected),
 	)
 	m.rightPane.table = m.rightPane.table.WithStaticFooter(
-		paneFooter(m.rightPane.path, m.rightPane.highlightedName()),
+		fmt.Sprintf("%s | selected: %d", paneFooter(m.rightPane.path, m.rightPane.highlightedName()), rightSelected),
 	)
+}
+
+func selectedCount(selected map[string]bool) int {
+	total := 0
+	for _, isSelected := range selected {
+		if isSelected {
+			total++
+		}
+	}
+
+	return total
 }

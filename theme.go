@@ -10,6 +10,8 @@ type appTheme struct {
 	missing     lipgloss.Color
 	highlightBG lipgloss.Color
 	highlightFG lipgloss.Color
+	selectedBG  lipgloss.Color
+	selectedFG  lipgloss.Color
 }
 
 var (
@@ -21,6 +23,8 @@ var (
 		missing:     lipgloss.Color("#f38ba8"),
 		highlightBG: lipgloss.Color("#89b4fa"),
 		highlightFG: lipgloss.Color("#1e1e2e"),
+		selectedBG:  lipgloss.Color("#45475a"),
+		selectedFG:  lipgloss.Color("#f5e0dc"),
 	}
 
 	catppuccinLatte = appTheme{
@@ -31,6 +35,8 @@ var (
 		missing:     lipgloss.Color("#d20f39"),
 		highlightBG: lipgloss.Color("#1e66f5"),
 		highlightFG: lipgloss.Color("#eff1f5"),
+		selectedBG:  lipgloss.Color("#ccd0da"),
+		selectedFG:  lipgloss.Color("#1e66f5"),
 	}
 
 	catppuccinFrappe = appTheme{
@@ -41,6 +47,8 @@ var (
 		missing:     lipgloss.Color("#e78284"),
 		highlightBG: lipgloss.Color("#8caaee"),
 		highlightFG: lipgloss.Color("#303446"),
+		selectedBG:  lipgloss.Color("#51576d"),
+		selectedFG:  lipgloss.Color("#a5adce"),
 	}
 
 	catppuccinMacchiato = appTheme{
@@ -51,6 +59,8 @@ var (
 		missing:     lipgloss.Color("#ed8796"),
 		highlightBG: lipgloss.Color("#8aadf4"),
 		highlightFG: lipgloss.Color("#24273a"),
+		selectedBG:  lipgloss.Color("#494d64"),
+		selectedFG:  lipgloss.Color("#f4dbd6"),
 	}
 
 	nord = appTheme{
@@ -61,6 +71,8 @@ var (
 		missing:     lipgloss.Color("#bf616a"),
 		highlightBG: lipgloss.Color("#5e81ac"),
 		highlightFG: lipgloss.Color("#eceff4"),
+		selectedBG:  lipgloss.Color("#434c5e"),
+		selectedFG:  lipgloss.Color("#88c0d0"),
 	}
 )
 

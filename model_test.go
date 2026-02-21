@@ -113,3 +113,27 @@ func TestCapitalGMovesToLastItem(t *testing.T) {
 		t.Fatalf("expected highlighted index %d, got %d", last, got)
 	}
 }
+
+func TestSpaceSelectsAndMovesToNextRow(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	firstName := model.leftPane.highlightedName()
+	if firstName == "" {
+		t.Fatal("expected a highlighted row")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+
+	if !model.leftPane.isSelected(firstName) {
+		t.Fatalf("expected %q to be selected", firstName)
+	}
+	if got := model.leftPane.table.GetHighlightedRowIndex(); got != 1 {
+		t.Fatalf("expected highlight to move to index 1, got %d", got)
+	}
+}

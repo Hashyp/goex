@@ -26,8 +26,8 @@ func (m *Model) toggleHeader() {
 }
 
 func (m *Model) applyTheme() {
-	m.leftPane.table = applyThemeToTable(m.leftPane.table, m.theme)
-	m.rightPane.table = applyThemeToTable(m.rightPane.table, m.theme)
+	m.leftPane.table = applyThemeToTable(m.leftPane.table, m.theme, m.leftPane.selected)
+	m.rightPane.table = applyThemeToTable(m.rightPane.table, m.theme, m.rightPane.selected)
 }
 
 func (m *Model) toggleTheme() {
@@ -68,6 +68,22 @@ func (m *Model) jumpToLastRow() {
 	active.table = active.table.WithHighlightedRow(lastIndex)
 }
 
+func (m *Model) selectHighlightedAndAdvance() {
+	active := m.activePaneRef()
+	if !active.toggleHighlightedSelection() {
+		return
+	}
+
+	currentIndex := active.table.GetHighlightedRowIndex()
+	lastIndex := len(active.table.GetVisibleRows()) - 1
+	nextIndex := currentIndex + 1
+	if nextIndex > lastIndex {
+		nextIndex = lastIndex
+	}
+
+	active.table = active.table.WithHighlightedRow(nextIndex)
+}
+
 func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "esc", "q":
@@ -85,6 +101,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 	case "t":
 		m.toggleTheme()
 		m.status = fmt.Sprintf("Theme: %s", m.theme.name)
+		return true, nil
+	case " ":
+		m.selectHighlightedAndAdvance()
 		return true, nil
 	case "G", "shift+g", "end":
 		m.jumpToLastRow()
