@@ -10,7 +10,7 @@ defaultdevcontainer is a terminal-based dual-pane file browser built with Bubble
 
 ```text
 .
-|- cmd/defaultdevcontainer/main.go   # application entrypoint
+|- cmd/goex/main.go   # application entrypoint
 |- internal/app/                     # core TUI application logic
 |  |- model.go
 |  |- pane.go
@@ -53,14 +53,14 @@ Most commands must run inside the devcontainer. The working directory inside the
 Use:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && <your-command>'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && <your-command>'
 ```
 
 Examples:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/defaultdevcontainer'
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/goex'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 ./scripts/run.sh
 ./scripts/test.sh
 ```
@@ -84,7 +84,7 @@ A feature is done only after tests pass.
 Always run the full test suite after implementation or fixes:
 
 ```bash
-docker exec default-go-devcontainer sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 ```
 
 Provide a concise commit message summary when asked.
