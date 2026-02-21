@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/evertras/bubble-table/table"
 )
@@ -34,7 +35,7 @@ func formatSize(bytes int64) string {
 	}
 }
 
-func getDirAndFiles(fs FileSystem, path string) ([]table.Row, error) {
+func getDirAndFiles(fs FileSystem, path string, showHidden bool) ([]table.Row, error) {
 	entries, err := fs.ReadDir(path)
 	if err != nil {
 		return nil, err
@@ -59,6 +60,10 @@ func getDirAndFiles(fs FileSystem, path string) ([]table.Row, error) {
 
 	rows := []table.Row{}
 	for _, entry := range entries {
+		if !showHidden && strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
 		info, err := entry.Info()
 		if err != nil {
 			continue

@@ -11,20 +11,22 @@ type Pane struct {
 	path         string
 	table        table.Model
 	selected     map[string]bool
+	showHidden   bool
 	baseRows     []table.Row
 	searchQuery  string
 	searchRegex  *regexp.Regexp
 	matchIndexes []int
 }
 
-func newPane(fs FileSystem, path string, theme appTheme) (Pane, error) {
+func newPane(fs FileSystem, path string, theme appTheme, showHidden bool) (Pane, error) {
 	selected := map[string]bool{}
-	rows, err := getDirAndFiles(fs, path)
+	rows, err := getDirAndFiles(fs, path, showHidden)
 	if err != nil {
 		return Pane{
 			path:         path,
 			table:        createTable([]table.Row{}, theme, selected),
 			selected:     selected,
+			showHidden:   showHidden,
 			baseRows:     []table.Row{},
 			searchQuery:  "",
 			searchRegex:  nil,
@@ -36,6 +38,7 @@ func newPane(fs FileSystem, path string, theme appTheme) (Pane, error) {
 		path:         path,
 		table:        createTable([]table.Row{}, theme, selected),
 		selected:     selected,
+		showHidden:   showHidden,
 		baseRows:     rows,
 		searchQuery:  "",
 		searchRegex:  nil,
@@ -46,7 +49,7 @@ func newPane(fs FileSystem, path string, theme appTheme) (Pane, error) {
 }
 
 func (p *Pane) reload(fs FileSystem, theme appTheme) error {
-	rows, err := getDirAndFiles(fs, p.path)
+	rows, err := getDirAndFiles(fs, p.path, p.showHidden)
 	if err != nil {
 		return err
 	}

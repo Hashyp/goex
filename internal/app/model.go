@@ -41,8 +41,9 @@ func NewModel() Model {
 func NewModelWithFS(fs FileSystem, startPath string) Model {
 	themeIndex := 0
 	theme := themes[themeIndex]
-	leftPane, leftErr := newPane(fs, startPath, theme)
-	rightPane, rightErr := newPane(fs, startPath, theme)
+	showHidden := true
+	leftPane, leftErr := newPane(fs, startPath, theme, showHidden)
+	rightPane, rightErr := newPane(fs, startPath, theme, showHidden)
 	status := ""
 	if leftErr != nil {
 		status = leftErr.Error()
