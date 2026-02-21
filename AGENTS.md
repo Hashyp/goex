@@ -10,7 +10,7 @@ goex is a terminal-based dual-pane file browser built with Bubble Tea that allow
 
 ```text
 .
-|- cmd/defaultdevcontainer/main.go   # application entrypoint
+|- cmd/goex/main.go   # application entrypoint
 |- internal/app/                     # core TUI application logic
 |  |- model.go
 |  |- pane.go
@@ -59,7 +59,7 @@ docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && <your-command>'
 Examples:
 
 ```bash
-docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/defaultdevcontainer'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go run ./cmd/goex'
 docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 ./scripts/run.sh
 ./scripts/test.sh

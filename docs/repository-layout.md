@@ -2,7 +2,7 @@
 
 This repository follows a standard Go application structure:
 
-- `cmd/defaultdevcontainer`: main package and process startup.
+- `cmd/goex`: main package and process startup.
 - `internal/app`: non-exported app logic, UI state, and tests.
 - `docs`: architecture notes and contributor-facing documentation.
 - `scripts`: helper scripts for run/test workflows.

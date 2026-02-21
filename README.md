@@ -4,7 +4,7 @@
 
 ## Repository Layout
 
-- `cmd/defaultdevcontainer`: executable entrypoint
+- `cmd/goex`: executable entrypoint
 - `internal/app`: application logic and tests
 - `docs`: architecture and repository documentation
 - `scripts`: repeatable local/devcontainer command wrappers
@@ -14,7 +14,7 @@
 ## Run
 
 ```bash
-go run ./cmd/defaultdevcontainer
+go run ./cmd/goex
 ```
 
 ## Test
