@@ -1,0 +1,9 @@
+{
+	"id": "ripgrep",
+	"version": "1.0.0",
+	"name": "ripgrep",
+	"description": "Installs ripgrep (rg).",
+	"installsAfter": [
+		"ghcr.io/devcontainers/features/common-utils"
+	]
+}

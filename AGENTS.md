@@ -1,10 +1,10 @@
-# Agent Development Guide - defaultdevcontainer
+# Agent Development Guide - goex
 
 You are a Go expert designing and implementing high-quality, clean code solutions that favor SOLID principles.
 
 ## Project Overview
 
-defaultdevcontainer is a terminal-based dual-pane file browser built with Bubble Tea that allows navigation and file operations between local file systems and Azure Blob Storage.
+goex is a terminal-based dual-pane file browser built with Bubble Tea that allows navigation and file operations between local file systems and Azure Blob Storage.
 
 ## Repository Layout
 
