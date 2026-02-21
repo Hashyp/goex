@@ -39,6 +39,21 @@ func (m *Model) toggleTheme() {
 	m.rightPane.refreshRows(m.theme)
 }
 
+func (m *Model) toggleHiddenFiles() {
+	active := m.activePaneRef()
+	active.showHidden = !active.showHidden
+	if err := active.reload(m.fs, m.theme); err != nil {
+		m.status = err.Error()
+		return
+	}
+	if active.showHidden {
+		m.status = "Hidden files: shown"
+		return
+	}
+
+	m.status = "Hidden files: hidden"
+}
+
 func (m *Model) updateAllTables(msg tea.Msg) []tea.Cmd {
 	cmds := make([]tea.Cmd, 0, 2)
 
@@ -189,6 +204,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, nil
 	case " ":
 		m.selectHighlightedAndAdvance()
+		return true, nil
+	case ".":
+		m.toggleHiddenFiles()
 		return true, nil
 	case "n":
 		m.moveToSearchMatch(true)

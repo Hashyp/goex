@@ -296,6 +296,64 @@ func TestRowsShowDirectoriesBeforeFiles(t *testing.T) {
 	}
 }
 
+func TestModelShowsHiddenFilesByDefault(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{".env", "visible.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	got := visibleNames(model.leftPane.table.GetVisibleRows())
+	if !slices.Equal(got, []string{".env", "visible.txt"}) {
+		t.Fatalf("expected hidden files visible by default, got=%v", got)
+	}
+}
+
+func TestDotTogglesHiddenFilesVisibilityPerPane(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".hidden-dir"), 0o755); err != nil {
+		t.Fatalf("mkdir hidden dir: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "visible-dir"), 0o755); err != nil {
+		t.Fatalf("mkdir visible dir: %v", err)
+	}
+	for _, name := range []string{".env", "visible.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := NewModelWithFS(OSFileSystem{}, root)
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'.'}})
+	leftHidden := visibleNames(model.leftPane.table.GetVisibleRows())
+	if !slices.Equal(leftHidden, []string{"visible-dir", "visible.txt"}) {
+		t.Fatalf("expected left pane hidden entries hidden after '.', got=%v", leftHidden)
+	}
+	rightUnchanged := visibleNames(model.rightPane.table.GetVisibleRows())
+	if !slices.Equal(rightUnchanged, []string{".hidden-dir", "visible-dir", ".env", "visible.txt"}) {
+		t.Fatalf("expected right pane unchanged after left '.', got=%v", rightUnchanged)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'.'}})
+	rightHidden := visibleNames(model.rightPane.table.GetVisibleRows())
+	if !slices.Equal(rightHidden, []string{"visible-dir", "visible.txt"}) {
+		t.Fatalf("expected right pane hidden entries hidden after right '.', got=%v", rightHidden)
+	}
+	leftStillHidden := visibleNames(model.leftPane.table.GetVisibleRows())
+	if !slices.Equal(leftStillHidden, []string{"visible-dir", "visible.txt"}) {
+		t.Fatalf("expected left pane unchanged after right '.', got=%v", leftStillHidden)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'.'}})
+	rightShown := visibleNames(model.rightPane.table.GetVisibleRows())
+	if !slices.Equal(rightShown, []string{".hidden-dir", "visible-dir", ".env", "visible.txt"}) {
+		t.Fatalf("expected right pane hidden entries shown after second right '.', got=%v", rightShown)
+	}
+}
+
 func TestBackToParentHighlightsVisitedDirectory(t *testing.T) {
 	root := t.TempDir()
 	targetDir := filepath.Join(root, "alpha")
