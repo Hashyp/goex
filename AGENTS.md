@@ -69,6 +69,28 @@ docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
 
 `git` and `gh` commands can run outside the container.
 
+## CRITICAL: Mandatory Recreate After Devcontainer Config Changes
+
+If `.devcontainer/devcontainer.json` is changed in any way, you must recreate the DevPod workspace before running any further development/testing commands.
+
+Use these exact identifiers:
+
+- Workspace name: `defaultdevcontainer`
+- Container name: `goex`
+- In-container project path: `/workspaces/defaultdevcontainer`
+
+Run this exact sequence from the host:
+
+```bash
+devpod-cli up defaultdevcontainer --recreate --ide none --open-ide=false
+docker exec goex sh -lc 'command -v minio >/dev/null && echo minio:installed; command -v fake-gcs-server >/dev/null && echo fake-gcs-server:installed; command -v azurite >/dev/null && echo azurite:installed'
+docker exec goex sh -lc 'ss -ltn | grep -E ":(10000|9000|4443)"'
+docker exec goex sh -lc 'curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null && echo minio:running; curl -fsS http://127.0.0.1:4443/storage/v1/b >/dev/null && echo fake-gcs-server:running'
+docker exec goex sh -lc 'cd /workspaces/defaultdevcontainer && go test ./...'
+```
+
+Do not skip this recreate step after devcontainer config changes.
+
 ## CRITICAL: Branching and Clean Working Tree
 
 Always start a new feature branch before implementation work.

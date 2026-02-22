@@ -1,0 +1,9 @@
+{
+	"id": "fake-gcs-server",
+	"version": "1.0.0",
+	"name": "fake-gcs-server",
+	"description": "Installs fake-gcs-server emulator binary globally.",
+	"installsAfter": [
+		"ripgrep"
+	]
+}

@@ -1,0 +1,9 @@
+{
+	"id": "minio",
+	"version": "1.0.0",
+	"name": "minio",
+	"description": "Installs MinIO server binary globally.",
+	"installsAfter": [
+		"ripgrep"
+	]
+}

@@ -30,6 +30,21 @@ go run ./cmd/goex
 go test ./...
 ```
 
+## Devcontainer Storage Emulators
+
+The devcontainer starts these local storage endpoints automatically:
+
+- Azurite: `http://127.0.0.1:10000`
+- MinIO (S3 API): `http://127.0.0.1:9000`
+- fake-gcs-server (GCS emulator): `http://127.0.0.1:4443`
+
+GCS emulator env defaults inside the devcontainer:
+
+- `STORAGE_EMULATOR_HOST=http://127.0.0.1:4443`
+- `GOEX_GCS_EMULATOR_HOST=http://127.0.0.1:4443`
+
+See `docs/gcs-emulator.md` for usage details.
+
 ## S3 Right Pane Behavior
 
 - Starts at S3 bucket list (`s3:///`).
@@ -79,4 +94,12 @@ MinIO integration tests are opt-in locally:
 
 ```bash
 GOEX_RUN_MINIO_TESTS=1 go test ./...
+```
+
+## Integration Tests (GCS Emulator)
+
+When GCS integration tests are added, run them against fake-gcs-server with:
+
+```bash
+./scripts/test-gcs.sh
 ```

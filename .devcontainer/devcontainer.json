@@ -7,7 +7,9 @@
 	"features": {
 		"ghcr.io/schlich/devcontainer-features/helix:1": {},
 		"./features/ripgrep": {},
-		"./features/azurite": {}
+		"./features/azurite": {},
+		"./features/minio": {},
+		"./features/fake-gcs-server": {}
 		// "ghcr.io/meaningful-ooo/devcontainer-features/fish:2": {}
 	},
 
@@ -16,11 +18,13 @@
 	],
 	"containerEnv": {
 		"MINIO_ROOT_USER": "minioadmin",
-		"MINIO_ROOT_PASSWORD": "minioadmin"
+		"MINIO_ROOT_PASSWORD": "minioadmin",
+		"STORAGE_EMULATOR_HOST": "http://127.0.0.1:4443",
+		"GOEX_GCS_EMULATOR_HOST": "http://127.0.0.1:4443"
 	},
-	"postCreateCommand": "bash -lc 'set -e; touch ~/.bash_aliases; grep -q \"alias goex=\\\"go run ./cmd/goex\\\"\" ~/.bash_aliases || echo \"alias goex=\\\"go run ./cmd/goex\\\"\" >> ~/.bash_aliases; grep -q \"source ~/.bash_aliases\" ~/.bashrc || echo \"source ~/.bash_aliases\" >> ~/.bashrc; if ! command -v minio >/dev/null; then tmp_bin=$(mktemp); curl -fsSL https://dl.min.io/server/minio/release/linux-amd64/minio -o \"$tmp_bin\"; sudo install -m 0755 \"$tmp_bin\" /usr/local/bin/minio; rm -f \"$tmp_bin\"; fi'",
-	"postStartCommand": "bash -lc 'mkdir -p /tmp/azurite /tmp/minio /tmp/minio-data; if ! ss -ltn | grep -q \":10000\"; then nohup azurite --location /tmp/azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck >/tmp/azurite/azurite.log 2>&1 < /dev/null & fi; if ! ss -ltn | grep -q \":9000\"; then nohup minio server /tmp/minio-data --address :9000 --console-address :9001 >/tmp/minio/minio.log 2>&1 < /dev/null & fi'",
-	"forwardPorts": [10000, 10001, 10002, 9000, 9001],
+	"postCreateCommand": "bash -lc 'set -e; touch ~/.bash_aliases; grep -q \"alias goex=\\\"go run ./cmd/goex\\\"\" ~/.bash_aliases || echo \"alias goex=\\\"go run ./cmd/goex\\\"\" >> ~/.bash_aliases; grep -q \"source ~/.bash_aliases\" ~/.bashrc || echo \"source ~/.bash_aliases\" >> ~/.bashrc'",
+	"postStartCommand": "bash -lc 'mkdir -p /tmp/azurite /tmp/minio /tmp/minio-data /tmp/fake-gcs /tmp/fake-gcs/data; if ! ss -ltn | grep -q \":10000\"; then nohup azurite --location /tmp/azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck >/tmp/azurite/azurite.log 2>&1 < /dev/null & fi; if ! ss -ltn | grep -q \":9000\"; then nohup minio server /tmp/minio-data --address :9000 --console-address :9001 >/tmp/minio/minio.log 2>&1 < /dev/null & fi; if ! ss -ltn | grep -q \":4443\"; then nohup fake-gcs-server -scheme http -host 0.0.0.0 -port 4443 -backend filesystem -filesystem-root /tmp/fake-gcs/data -external-url http://127.0.0.1:4443 >/tmp/fake-gcs/fake-gcs.log 2>&1 < /dev/null & fi'",
+	"forwardPorts": [10000, 10001, 10002, 9000, 9001, 4443],
 	"customizations": {
 		"vscode": {
 			"extensions": [
