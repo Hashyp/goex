@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
@@ -39,19 +40,20 @@ func (m *Model) toggleTheme() {
 	m.rightPane.refreshRows(m.theme)
 }
 
-func (m *Model) toggleHiddenFiles() {
+func (m *Model) toggleHiddenFiles() tea.Cmd {
 	active := m.activePaneRef()
 	active.showHidden = !active.showHidden
-	if err := active.reload(m.fs, m.theme); err != nil {
-		m.status = err.Error()
-		return
-	}
 	if active.showHidden {
 		m.status = "Hidden files: shown"
-		return
+	} else {
+		m.status = "Hidden files: hidden"
 	}
 
-	m.status = "Hidden files: hidden"
+	return active.beginLoad(m.activePane)
+}
+
+func (m *Model) reloadActivePane() tea.Cmd {
+	return m.activePaneRef().beginLoad(m.activePane)
 }
 
 func (m *Model) updateAllTables(msg tea.Msg) []tea.Cmd {
@@ -206,8 +208,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		m.selectHighlightedAndAdvance()
 		return true, nil
 	case ".":
-		m.toggleHiddenFiles()
-		return true, nil
+		return true, []tea.Cmd{m.toggleHiddenFiles()}
+	case "r":
+		return true, []tea.Cmd{m.reloadActivePane()}
 	case "n":
 		m.moveToSearchMatch(true)
 		return true, nil
@@ -218,18 +221,22 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		m.jumpToLastRow()
 		return true, nil
 	case "enter", "l":
-		if err := m.activePaneRef().enterHighlightedDirectory(m.fs, m.theme); err != nil {
+		changed, err := m.activePaneRef().enterHighlighted(context.Background())
+		if err != nil {
 			m.status = err.Error()
-		} else {
-			m.status = ""
+			return true, nil
 		}
+		if changed {
+			return true, []tea.Cmd{m.reloadActivePane()}
+		}
+		m.status = ""
 		return true, nil
 	case "backspace", "h":
-		if err := m.activePaneRef().goParent(m.fs, m.theme); err != nil {
-			m.status = err.Error()
-		} else {
+		if changed := m.activePaneRef().goParent(); changed {
 			m.status = ""
+			return true, []tea.Cmd{m.reloadActivePane()}
 		}
+		m.status = ""
 		return true, nil
 	default:
 		return false, nil

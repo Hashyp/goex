@@ -50,6 +50,8 @@ Placement rules for new files:
 
 Most commands must run inside the devcontainer. The working directory inside the container is `/workspaces/defaultdevcontainer`.
 
+Use `devpod-cli` for all DevPod workspace lifecycle commands (`up`, `ssh`, `stop`, `delete`, etc.). Do not use the `devpod` command.
+
 Use:
 
 ```bash

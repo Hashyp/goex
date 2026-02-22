@@ -39,17 +39,21 @@ func rowNameFromData(data table.RowData) string {
 	}
 }
 
+func rowEntryIDFromData(data table.RowData) string {
+	if raw, ok := data[columnKeyEntryID].(string); ok {
+		return raw
+	}
+
+	return ""
+}
+
 func (p *Pane) refreshRows(theme appTheme) {
-	rows := make([]table.Row, 0, len(p.baseRows))
-	for _, base := range p.baseRows {
-		data := make(table.RowData, len(base.Data)+1)
-		for key, value := range base.Data {
-			data[key] = value
-		}
-
-		name := rowNameFromData(base.Data)
+	rows := make([]table.Row, 0, len(p.entries))
+	for _, entry := range p.entries {
+		data := make(table.RowData, 6)
+		name := entry.Name
+		data[columnKeyEntryID] = entry.ID
 		data[columnKeyNameRaw] = name
-
 		if p.searchRegex != nil {
 			if highlighted, matched := highlightedSearchText(name, p.searchRegex, theme); matched {
 				data[columnKeyName] = table.NewStyledCell(highlighted, lipgloss.NewStyle())
@@ -58,6 +62,20 @@ func (p *Pane) refreshRows(theme appTheme) {
 			}
 		} else {
 			data[columnKeyName] = name
+		}
+
+		if entry.IsDirLike() {
+			data[columnKeySize] = "<DIR>"
+		} else {
+			data[columnKeySize] = formatSize(entry.SizeBytes)
+		}
+
+		if entry.HasModTime {
+			data[columnKeyDate] = entry.ModTime.Format("2006-01-02")
+			data[columnKeyTime] = entry.ModTime.Format("15:04:05")
+		} else {
+			data[columnKeyDate] = ""
+			data[columnKeyTime] = ""
 		}
 
 		rows = append(rows, table.NewRow(data))
