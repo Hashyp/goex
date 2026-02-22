@@ -22,8 +22,8 @@
 		"STORAGE_EMULATOR_HOST": "http://127.0.0.1:4443",
 		"GOEX_GCS_EMULATOR_HOST": "http://127.0.0.1:4443"
 	},
-	"postCreateCommand": "bash -lc 'set -e; touch ~/.bash_aliases; grep -q \"alias goex=\\\"go run /workspaces/defaultdevcontainer/cmd/goex/main.go\\\"\" ~/.bash_aliases || echo \"alias goex=\\\"go run /workspaces/defaultdevcontainer/cmd/goex/main.go\\\"\" >> ~/.bash_aliases; grep -q \"source ~/.bash_aliases\" ~/.bashrc || echo \"source ~/.bash_aliases\" >> ~/.bashrc'",
-	"postStartCommand": "bash -lc 'mkdir -p /tmp/azurite /tmp/minio /tmp/minio-data /tmp/fake-gcs /tmp/fake-gcs/data; if ! ss -ltn | grep -q \":10000\"; then nohup azurite --location /tmp/azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck >/tmp/azurite/azurite.log 2>&1 < /dev/null & fi; if ! ss -ltn | grep -q \":9000\"; then nohup minio server /tmp/minio-data --address :9000 --console-address :9001 >/tmp/minio/minio.log 2>&1 < /dev/null & fi; if ! ss -ltn | grep -q \":4443\"; then nohup fake-gcs-server -scheme http -host 0.0.0.0 -port 4443 -backend filesystem -filesystem-root /tmp/fake-gcs/data -external-url http://127.0.0.1:4443 >/tmp/fake-gcs/fake-gcs.log 2>&1 < /dev/null & fi'",
+	"postCreateCommand": "bash ./scripts/devcontainer/post-create.sh",
+	"postStartCommand": "bash ./scripts/devcontainer/post-start.sh",
 	"forwardPorts": [10000, 10001, 10002, 9000, 9001, 4443],
 	"customizations": {
 		"vscode": {
