@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"defaultdevcontainer/internal/azureblob"
+	"defaultdevcontainer/internal/gcsblob"
 	"defaultdevcontainer/internal/s3blob"
 )
 
@@ -15,12 +16,14 @@ const (
 	paneBackendFilesystem paneBackendChoice = iota
 	paneBackendAzure
 	paneBackendS3
+	paneBackendGCS
 )
 
 var paneBackendChoices = []paneBackendChoice{
 	paneBackendFilesystem,
 	paneBackendAzure,
 	paneBackendS3,
+	paneBackendGCS,
 }
 
 func paneBackendLabel(choice paneBackendChoice) string {
@@ -31,6 +34,8 @@ func paneBackendLabel(choice paneBackendChoice) string {
 		return "azure"
 	case paneBackendS3:
 		return "s3"
+	case paneBackendGCS:
+		return "gcs"
 	default:
 		return "unknown"
 	}
@@ -61,6 +66,17 @@ func paneBackendForChoice(choice paneBackendChoice, localStartPath string) PaneB
 			)
 		}
 		return NewS3Backend(client, s3Config.RequestTimeout)
+	case paneBackendGCS:
+		gcsConfig := gcsblob.DefaultConfig()
+		client, err := gcsblob.NewClient(context.Background(), gcsConfig)
+		if err != nil {
+			return NewStaticErrorBackendWithLocation(
+				fmt.Errorf("failed to initialize gcs client: %w", err),
+				GCSLocation{Mode: GCSModeBuckets},
+				"gcs:///",
+			)
+		}
+		return NewGCSBackend(client, gcsConfig.ProjectID, gcsConfig.RequestTimeout)
 	default:
 		return NewStaticErrorBackend(fmt.Errorf("unsupported backend selection"))
 	}
@@ -74,6 +90,8 @@ func paneBackendChoiceFromPane(p Pane) paneBackendChoice {
 		return paneBackendAzure
 	case S3Backend:
 		return paneBackendS3
+	case GCSBackend:
+		return paneBackendGCS
 	case StaticErrorBackend:
 		switch p.location.(type) {
 		case LocalLocation:
@@ -82,6 +100,8 @@ func paneBackendChoiceFromPane(p Pane) paneBackendChoice {
 			return paneBackendAzure
 		case S3Location:
 			return paneBackendS3
+		case GCSLocation:
+			return paneBackendGCS
 		default:
 			return paneBackendFilesystem
 		}

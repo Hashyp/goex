@@ -9,6 +9,7 @@
 
 - `cmd/goex`: executable entrypoint
 - `cmd/seed-azurite`: seed Azurite with demo containers/blobs
+- `cmd/seed-gcs`: seed fake-gcs-server with demo buckets/objects
 - `cmd/seed-minio`: seed MinIO with demo buckets/objects
 - `internal/app`: application logic and tests
 - `internal/azureblob`: shared Azure client/bootstrap helpers
@@ -53,7 +54,7 @@ See `docs/gcs-emulator.md` for usage details.
 - `.` toggles hidden entries for active pane.
 - Hidden S3 entries are those where any key segment starts with `.`.
 - `r` retries loading active pane (useful after connectivity errors).
-- `p` opens backend picker modal for the active pane (file system / azure / s3).
+- `p` opens backend picker modal for the active pane (file system / azure / s3 / gcs).
   - `Enter` applies selected backend to that pane.
   - `Esc` closes modal without changes.
   - Both panes can use the same backend at the same time.
@@ -98,8 +99,16 @@ GOEX_RUN_MINIO_TESTS=1 go test ./...
 
 ## Integration Tests (GCS Emulator)
 
-When GCS integration tests are added, run them against fake-gcs-server with:
+Run GCS integration tests against fake-gcs-server with:
 
 ```bash
 ./scripts/test-gcs.sh
+```
+
+## Seed GCS Emulator
+
+Seed fake-gcs-server with demo buckets/objects:
+
+```bash
+go run ./cmd/seed-gcs
 ```

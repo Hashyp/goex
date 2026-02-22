@@ -39,3 +39,18 @@ type S3Location struct {
 }
 
 func (S3Location) isLocation() {}
+
+type GCSMode string
+
+const (
+	GCSModeBuckets GCSMode = "buckets"
+	GCSModeObjects GCSMode = "objects"
+)
+
+type GCSLocation struct {
+	Mode   GCSMode
+	Bucket string
+	Prefix string
+}
+
+func (GCSLocation) isLocation() {}
