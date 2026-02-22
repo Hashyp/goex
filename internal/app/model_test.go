@@ -11,15 +11,41 @@ import (
 	"github.com/evertras/bubble-table/table"
 )
 
+func runCmd(t *testing.T, model Model, cmd tea.Cmd) Model {
+	t.Helper()
+	current := model
+	nextCmd := cmd
+	for nextCmd != nil {
+		msg := nextCmd()
+		if msg == nil {
+			break
+		}
+		updated, chained := current.Update(msg)
+		nextModel, ok := updated.(Model)
+		if !ok {
+			t.Fatalf("unexpected model type: %T", updated)
+		}
+		current = nextModel
+		nextCmd = chained
+	}
+
+	return current
+}
+
+func initModel(t *testing.T, model Model) Model {
+	t.Helper()
+	return runCmd(t, model, model.Init())
+}
+
 func pressKey(t *testing.T, model Model, key tea.KeyMsg) Model {
 	t.Helper()
-	updated, _ := model.Update(key)
+	updated, cmd := model.Update(key)
 	next, ok := updated.(Model)
 	if !ok {
 		t.Fatalf("unexpected model type: %T", updated)
 	}
 
-	return next
+	return runCmd(t, next, cmd)
 }
 
 func TestFocusedPaneMovesIndependently(t *testing.T) {
@@ -30,7 +56,7 @@ func TestFocusedPaneMovesIndependently(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	if !model.leftPane.table.GetFocused() || model.rightPane.table.GetFocused() {
 		t.Fatalf("expected left pane focused initially")
 	}
@@ -70,7 +96,7 @@ func TestEnterAndParentNavigationOnFocusedPane(t *testing.T) {
 		t.Fatalf("write root file: %v", err)
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.leftPane.path != child {
@@ -92,7 +118,7 @@ func TestEnterOnFileDoesNotChangePath(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.leftPane.path != root {
@@ -108,7 +134,7 @@ func TestCapitalGMovesToLastItem(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
 
 	last := len(model.leftPane.table.GetVisibleRows()) - 1
@@ -125,16 +151,16 @@ func TestSpaceSelectsAndMovesToNextRow(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
-	firstName := model.leftPane.highlightedName()
-	if firstName == "" {
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	firstEntry, ok := model.leftPane.highlightedEntry()
+	if !ok {
 		t.Fatal("expected a highlighted row")
 	}
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
 
-	if !model.leftPane.isSelected(firstName) {
-		t.Fatalf("expected %q to be selected", firstName)
+	if !model.leftPane.isSelected(firstEntry.ID) {
+		t.Fatalf("expected %q to be selected", firstEntry.ID)
 	}
 	if got := model.leftPane.table.GetHighlightedRowIndex(); got != 1 {
 		t.Fatalf("expected highlight to move to index 1, got %d", got)
@@ -149,7 +175,7 @@ func TestSearchModalApplyHighlightsAndNavigateMatches(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	if !model.searchModalVisible {
 		t.Fatal("expected search modal to be visible")
@@ -209,7 +235,7 @@ func TestEscapeClearsSearchHighlights(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
@@ -235,7 +261,7 @@ func TestEscapeClearsSearchHighlights(t *testing.T) {
 }
 
 func TestEscapeInSearchModalCancelsModal(t *testing.T) {
-	model := NewModelWithFS(OSFileSystem{}, t.TempDir())
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, t.TempDir()))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	if !model.searchModalVisible {
 		t.Fatal("expected modal to open")
@@ -260,7 +286,7 @@ func TestSearchDoesNotReorderRows(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	before := visibleNames(model.leftPane.table.GetVisibleRows())
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -288,7 +314,7 @@ func TestRowsShowDirectoriesBeforeFiles(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	got := visibleNames(model.leftPane.table.GetVisibleRows())
 	want := []string{"alpha", "zeta", "aardvark.txt", "beta.txt"}
 	if !slices.Equal(got, want) {
@@ -304,7 +330,7 @@ func TestModelShowsHiddenFilesByDefault(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	got := visibleNames(model.leftPane.table.GetVisibleRows())
 	if !slices.Equal(got, []string{".env", "visible.txt"}) {
 		t.Fatalf("expected hidden files visible by default, got=%v", got)
@@ -325,7 +351,7 @@ func TestDotTogglesHiddenFilesVisibilityPerPane(t *testing.T) {
 		}
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'.'}})
 	leftHidden := visibleNames(model.leftPane.table.GetVisibleRows())
 	if !slices.Equal(leftHidden, []string{"visible-dir", "visible.txt"}) {
@@ -367,7 +393,7 @@ func TestBackToParentHighlightsVisitedDirectory(t *testing.T) {
 		t.Fatalf("write nested file: %v", err)
 	}
 
-	model := NewModelWithFS(OSFileSystem{}, root)
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	if got := model.leftPane.highlightedName(); got != "alpha" {
 		t.Fatalf("expected initial highlight to be alpha, got %q", got)
 	}

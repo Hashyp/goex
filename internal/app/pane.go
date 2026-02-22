@@ -1,120 +1,136 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/evertras/bubble-table/table"
 )
 
 type Pane struct {
-	path         string
-	table        table.Model
-	selected     map[string]bool
-	showHidden   bool
-	baseRows     []table.Row
-	searchQuery  string
-	searchRegex  *regexp.Regexp
-	matchIndexes []int
+	backend              PaneBackend
+	location             Location
+	path                 string
+	table                table.Model
+	selected             map[string]bool
+	showHidden           bool
+	entries              []Entry
+	searchQuery          string
+	searchRegex          *regexp.Regexp
+	matchIndexes         []int
+	isLoading            bool
+	loadErr              error
+	loadSeq              int
+	pendingHighlightName string
 }
 
-func newPane(fs FileSystem, path string, theme appTheme, showHidden bool) (Pane, error) {
+func newPane(backend PaneBackend, theme appTheme, showHidden bool) Pane {
 	selected := map[string]bool{}
-	rows, err := getDirAndFiles(fs, path, showHidden)
-	if err != nil {
-		return Pane{
-			path:         path,
-			table:        createTable([]table.Row{}, theme, selected),
-			selected:     selected,
-			showHidden:   showHidden,
-			baseRows:     []table.Row{},
-			searchQuery:  "",
-			searchRegex:  nil,
-			matchIndexes: nil,
-		}, err
-	}
+	location := backend.InitialLocation()
 
 	pane := Pane{
-		path:         path,
-		table:        createTable([]table.Row{}, theme, selected),
-		selected:     selected,
-		showHidden:   showHidden,
-		baseRows:     rows,
-		searchQuery:  "",
-		searchRegex:  nil,
-		matchIndexes: nil,
+		backend:              backend,
+		location:             location,
+		path:                 backend.DisplayPath(location),
+		table:                createTable([]table.Row{}, theme, selected),
+		selected:             selected,
+		showHidden:           showHidden,
+		entries:              []Entry{},
+		searchQuery:          "",
+		searchRegex:          nil,
+		matchIndexes:         nil,
+		isLoading:            false,
+		loadErr:              nil,
+		loadSeq:              0,
+		pendingHighlightName: "",
 	}
 	pane.refreshRows(theme)
-	return pane, nil
-}
-
-func (p *Pane) reload(fs FileSystem, theme appTheme) error {
-	rows, err := getDirAndFiles(fs, p.path, p.showHidden)
-	if err != nil {
-		return err
-	}
-
-	p.baseRows = rows
-	p.refreshRows(theme)
-	return nil
+	return pane
 }
 
 func (p *Pane) highlightedName() string {
-	highlighted := p.table.HighlightedRow()
-	if highlighted.Data == nil {
+	entry, ok := p.highlightedEntry()
+	if !ok {
 		return ""
 	}
 
-	return rowNameFromData(highlighted.Data)
+	return entry.Name
 }
 
-func (p *Pane) enterHighlightedDirectory(fs FileSystem, theme appTheme) error {
-	name := p.highlightedName()
-	if name == "" {
-		return nil
+func (p *Pane) highlightedEntry() (Entry, bool) {
+	highlighted := p.table.HighlightedRow()
+	if highlighted.Data == nil {
+		return Entry{}, false
 	}
 
-	target := filepath.Join(p.path, name)
-	info, err := fs.Stat(target)
+	entryID := rowEntryIDFromData(highlighted.Data)
+	if entryID == "" {
+		return Entry{}, false
+	}
+
+	for _, entry := range p.entries {
+		if entry.ID == entryID {
+			return entry, true
+		}
+	}
+
+	return Entry{}, false
+}
+
+func (p *Pane) enterHighlighted(ctx context.Context) (bool, error) {
+	highlighted, ok := p.highlightedEntry()
+	if !ok {
+		return false, nil
+	}
+
+	nextLocation, changed, err := p.backend.Enter(ctx, p.location, highlighted)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if !changed {
+		return false, nil
 	}
 
-	if !info.IsDir() {
-		return nil
-	}
-
-	p.path = target
-	return p.reload(fs, theme)
+	p.location = nextLocation
+	p.path = p.backend.DisplayPath(nextLocation)
+	return true, nil
 }
 
-func (p *Pane) goParent(fs FileSystem, theme appTheme) error {
-	childName := filepath.Base(p.path)
-	parent := filepath.Dir(p.path)
-	if parent == p.path {
-		return nil
+func (p *Pane) goParent() bool {
+	childName := p.highlightedName()
+	if local, ok := p.location.(LocalLocation); ok {
+		childName = filepathBase(local.Path)
+	}
+	if azure, ok := p.location.(AzureLocation); ok && azure.Mode == AzureModeObjects {
+		childName = azureCurrentName(azure)
 	}
 
-	p.path = parent
-	if err := p.reload(fs, theme); err != nil {
-		return err
-	}
-
-	p.highlightByName(childName)
-	return nil
-}
-
-func (p *Pane) isSelected(name string) bool {
-	return p.selected[name]
-}
-
-func (p *Pane) toggleHighlightedSelection() bool {
-	name := p.highlightedName()
-	if name == "" {
+	nextLocation, changed := p.backend.Parent(p.location)
+	if !changed {
 		return false
 	}
 
-	p.selected[name] = !p.selected[name]
+	p.location = nextLocation
+	p.path = p.backend.DisplayPath(nextLocation)
+	p.pendingHighlightName = childName
+	return true
+}
+
+func (p *Pane) isSelected(id string) bool {
+	return p.selected[id]
+}
+
+func (p *Pane) toggleHighlightedSelection() bool {
+	entry, ok := p.highlightedEntry()
+	if !ok {
+		return false
+	}
+
+	p.selected[entry.ID] = !p.selected[entry.ID]
 	return true
 }
 
@@ -175,4 +191,47 @@ func (p *Pane) highlightByName(name string) {
 			return
 		}
 	}
+}
+
+func (p *Pane) beginLoad(pane activePane) tea.Cmd {
+	p.loadSeq++
+	seq := p.loadSeq
+	p.isLoading = true
+	p.loadErr = nil
+
+	backend := p.backend
+	location := p.location
+	showHidden := p.showHidden
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		entries, err := backend.List(ctx, location, showHidden)
+		if err != nil {
+			return paneLoadErrorMsg{pane: pane, seq: seq, err: err}
+		}
+		return paneLoadSuccessMsg{pane: pane, seq: seq, entries: entries}
+	}
+}
+
+const loadTimeout = 10 * time.Second
+
+func filepathBase(path string) string {
+	base := filepath.Base(path)
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+
+	return base
+}
+
+func azureCurrentName(location AzureLocation) string {
+	trimmed := strings.TrimSuffix(location.Prefix, azureDelimiter)
+	if trimmed == "" {
+		return location.Container
+	}
+
+	parts := strings.Split(trimmed, azureDelimiter)
+	return parts[len(parts)-1]
 }

@@ -61,14 +61,14 @@ func applyThemeToTable(t table.Model, theme appTheme, selected map[string]bool) 
 	return t.
 		HeaderStyle(lipgloss.NewStyle().Foreground(theme.header).Bold(true)).
 		WithRowStyleFunc(func(input table.RowStyleFuncInput) lipgloss.Style {
-			name := rowNameFromData(input.Row.Data)
+			entryID := rowEntryIDFromData(input.Row.Data)
 			if input.IsHighlighted {
 				return lipgloss.NewStyle().
 					Foreground(theme.highlightFG).
 					Background(theme.highlightBG).
 					Bold(true)
 			}
-			if selected[name] {
+			if selected[entryID] {
 				return lipgloss.NewStyle().
 					Foreground(theme.selectedFG).
 					Background(theme.selectedBG).
