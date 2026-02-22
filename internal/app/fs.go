@@ -8,6 +8,7 @@ import (
 type FileSystem interface {
 	ReadDir(name string) ([]os.DirEntry, error)
 	Stat(name string) (fs.FileInfo, error)
+	Remove(name string) error
 }
 
 type OSFileSystem struct{}
@@ -18,4 +19,8 @@ func (OSFileSystem) ReadDir(name string) ([]os.DirEntry, error) {
 
 func (OSFileSystem) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
+}
+
+func (OSFileSystem) Remove(name string) error {
+	return os.Remove(name)
 }

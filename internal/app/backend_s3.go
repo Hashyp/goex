@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -102,6 +103,31 @@ func (b S3Backend) Enter(_ context.Context, state Location, highlighted Entry) (
 	default:
 		return state, false, nil
 	}
+}
+
+func (b S3Backend) Delete(ctx context.Context, state Location, highlighted Entry) error {
+	s3Location, ok := state.(S3Location)
+	if !ok {
+		return ErrInvalidLocation
+	}
+	if b.client == nil {
+		return fmt.Errorf("s3 client not configured")
+	}
+	if s3Location.Mode != S3ModeObjects || highlighted.Kind != KindObject {
+		return nil
+	}
+	if s3Location.Bucket == "" {
+		return fmt.Errorf("s3 bucket not selected")
+	}
+	if highlighted.FullPath == "" {
+		return fmt.Errorf("s3 object key is empty")
+	}
+
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s3Location.Bucket),
+		Key:    aws.String(highlighted.FullPath),
+	})
+	return err
 }
 
 func (b S3Backend) Parent(state Location) (Location, bool) {

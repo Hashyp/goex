@@ -30,6 +30,9 @@ func (m Model) View() string {
 		modal = m.searchModalView()
 		// Keep tables visible while modal is open.
 		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
+	} else if m.deleteModalVisible {
+		modal = m.deleteModalView()
+		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
 	}
 
 	leftWidth := m.width / 2
@@ -40,11 +43,33 @@ func (m Model) View() string {
 
 	tables := lipgloss.JoinHorizontal(lipgloss.Top, leftPaneView, rightPaneView)
 	background := lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, tables)
-	if !m.searchModalVisible && !m.pickerModalVisible {
+	if !m.searchModalVisible && !m.pickerModalVisible && !m.deleteModalVisible {
 		return background
 	}
 
 	return overlayCentered(background, modal, m.width, m.height)
+}
+
+func (m Model) deleteModalView() string {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.header).
+		Render("Confirm Delete")
+
+	question := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render(fmt.Sprintf("Delete %q?", m.deleteTargetEntry.Name))
+
+	hint := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render("y: yes  n/esc: cancel")
+
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.border).
+		Padding(1, 2).
+		Width(56).
+		Render(lipgloss.JoinVertical(lipgloss.Left, title, question, hint))
 }
 
 func (m Model) searchModalView() string {

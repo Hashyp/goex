@@ -106,6 +106,27 @@ func (b GCSBackend) Enter(_ context.Context, state Location, highlighted Entry) 
 	}
 }
 
+func (b GCSBackend) Delete(ctx context.Context, state Location, highlighted Entry) error {
+	gcsLocation, ok := state.(GCSLocation)
+	if !ok {
+		return ErrInvalidLocation
+	}
+	if b.client == nil {
+		return fmt.Errorf("gcs client not configured")
+	}
+	if gcsLocation.Mode != GCSModeObjects || highlighted.Kind != KindObject {
+		return nil
+	}
+	if gcsLocation.Bucket == "" {
+		return fmt.Errorf("gcs bucket not selected")
+	}
+	if highlighted.FullPath == "" {
+		return fmt.Errorf("gcs object key is empty")
+	}
+
+	return b.client.Bucket(gcsLocation.Bucket).Object(highlighted.FullPath).Delete(ctx)
+}
+
 func (b GCSBackend) Parent(state Location) (Location, bool) {
 	gcsLocation, ok := state.(GCSLocation)
 	if !ok {

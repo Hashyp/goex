@@ -97,3 +97,15 @@ func TestGCSListRequiresClient(t *testing.T) {
 		t.Fatal("expected error when gcs client is nil")
 	}
 }
+
+func TestGCSDeleteRequiresClient(t *testing.T) {
+	backend := NewGCSBackend(nil, "goex", 0)
+	err := backend.Delete(context.Background(), GCSLocation{Mode: GCSModeObjects, Bucket: "bucket"}, Entry{
+		Name:     "alpha.txt",
+		FullPath: "alpha.txt",
+		Kind:     KindObject,
+	})
+	if err == nil {
+		t.Fatal("expected error when gcs client is nil")
+	}
+}

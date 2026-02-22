@@ -93,3 +93,24 @@ func TestStaticErrorBackendReturnsConfiguredError(t *testing.T) {
 		t.Fatalf("expected configured error, got %v", err)
 	}
 }
+
+func TestStaticErrorBackendDeleteReturnsConfiguredError(t *testing.T) {
+	expected := errors.New("boom")
+	backend := NewStaticErrorBackend(expected)
+	err := backend.Delete(context.Background(), backend.InitialLocation(), Entry{Kind: KindObject})
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected configured error, got %v", err)
+	}
+}
+
+func TestAzureDeleteRequiresClient(t *testing.T) {
+	backend := NewAzureBlobBackend(nil)
+	err := backend.Delete(context.Background(), AzureLocation{Mode: AzureModeObjects, Container: "container"}, Entry{
+		Name:     "alpha.txt",
+		FullPath: "alpha.txt",
+		Kind:     KindObject,
+	})
+	if err == nil {
+		t.Fatal("expected error when azure client is nil")
+	}
+}

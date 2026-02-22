@@ -118,6 +118,52 @@ func (m *Model) closeSearchModal() {
 	m.searchInput.Blur()
 }
 
+func (m *Model) openDeleteModal() bool {
+	active := m.activePaneRef()
+	highlighted, ok := active.highlightedEntry()
+	if !ok {
+		m.status = "Delete: no file selected"
+		return false
+	}
+	if highlighted.Kind != KindObject {
+		m.status = "Delete: only files/objects are supported"
+		return false
+	}
+
+	m.deleteModalVisible = true
+	m.deleteTargetPane = m.activePane
+	m.deleteTargetEntry = highlighted
+	return true
+}
+
+func (m *Model) closeDeleteModal() {
+	m.deleteModalVisible = false
+	m.deleteTargetEntry = Entry{}
+}
+
+func (m *Model) confirmDelete() tea.Cmd {
+	paneID := m.deleteTargetPane
+	pane := m.paneByID(paneID)
+	backend := pane.backend
+	location := pane.location
+	entry := m.deleteTargetEntry
+	timeout := backend.LoadTimeout()
+	if timeout <= 0 {
+		timeout = defaultLoadTimeout
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		if err := backend.Delete(ctx, location, entry); err != nil {
+			return paneDeleteResultMsg{pane: paneID, err: err}
+		}
+
+		return paneDeleteResultMsg{pane: paneID}
+	}
+}
+
 func (m *Model) clearSearchHighlights() {
 	m.leftPane.clearSearch(m.theme)
 	m.rightPane.clearSearch(m.theme)
@@ -185,6 +231,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return m.handleSearchModalKey(msg)
 	}
 
+	if m.deleteModalVisible {
+		return m.handleDeleteModalKey(msg)
+	}
+
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return true, []tea.Cmd{tea.Quit}
@@ -218,6 +268,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, []tea.Cmd{m.toggleHiddenFiles()}
 	case "r":
 		return true, []tea.Cmd{m.reloadActivePane()}
+	case "d":
+		m.openDeleteModal()
+		return true, nil
 	case "n":
 		m.moveToSearchMatch(true)
 		return true, nil
@@ -247,6 +300,20 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, nil
 	default:
 		return false, nil
+	}
+}
+
+func (m *Model) handleDeleteModalKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "shift+y":
+		cmd := m.confirmDelete()
+		m.closeDeleteModal()
+		return true, []tea.Cmd{cmd}
+	case "n", "N", "shift+n", "esc":
+		m.closeDeleteModal()
+		return true, nil
+	default:
+		return true, nil
 	}
 }
 

@@ -97,3 +97,15 @@ func TestS3ListRequiresClient(t *testing.T) {
 		t.Fatal("expected error when s3 client is nil")
 	}
 }
+
+func TestS3DeleteRequiresClient(t *testing.T) {
+	backend := NewS3Backend(nil, 0)
+	err := backend.Delete(context.Background(), S3Location{Mode: S3ModeObjects, Bucket: "bucket"}, Entry{
+		Name:     "alpha.txt",
+		FullPath: "alpha.txt",
+		Kind:     KindObject,
+	})
+	if err == nil {
+		t.Fatal("expected error when s3 client is nil")
+	}
+}

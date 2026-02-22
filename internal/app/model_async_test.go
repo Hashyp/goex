@@ -14,6 +14,7 @@ type fakeBackend struct {
 	entries   []Entry
 	failCount int
 	calls     int
+	deleteErr error
 }
 
 func (b *fakeBackend) InitialLocation() Location {
@@ -31,6 +32,10 @@ func (b *fakeBackend) List(_ context.Context, _ Location, _ bool) ([]Entry, erro
 
 func (b *fakeBackend) Enter(_ context.Context, state Location, _ Entry) (Location, bool, error) {
 	return state, false, nil
+}
+
+func (b *fakeBackend) Delete(_ context.Context, _ Location, _ Entry) error {
+	return b.deleteErr
 }
 
 func (b *fakeBackend) Parent(state Location) (Location, bool) {

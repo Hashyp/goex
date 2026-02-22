@@ -100,6 +100,28 @@ func (b AzureBlobBackend) Enter(_ context.Context, state Location, highlighted E
 	}
 }
 
+func (b AzureBlobBackend) Delete(ctx context.Context, state Location, highlighted Entry) error {
+	azure, ok := state.(AzureLocation)
+	if !ok {
+		return ErrInvalidLocation
+	}
+	if b.client == nil {
+		return fmt.Errorf("azure client not configured")
+	}
+	if azure.Mode != AzureModeObjects || highlighted.Kind != KindObject {
+		return nil
+	}
+	if azure.Container == "" {
+		return fmt.Errorf("azure container not selected")
+	}
+	if highlighted.FullPath == "" {
+		return fmt.Errorf("azure object path is empty")
+	}
+
+	_, err := b.client.DeleteBlob(ctx, azure.Container, highlighted.FullPath, nil)
+	return err
+}
+
 func (b AzureBlobBackend) Parent(state Location) (Location, bool) {
 	azure, ok := state.(AzureLocation)
 	if !ok {

@@ -27,6 +27,11 @@ type paneLoadErrorMsg struct {
 	err  error
 }
 
+type paneDeleteResultMsg struct {
+	pane activePane
+	err  error
+}
+
 type initLoadMsg struct{}
 
 type Model struct {
@@ -41,6 +46,9 @@ type Model struct {
 	searchModalVisible bool
 	searchInput        textinput.Model
 	searchTargetPane   activePane
+	deleteModalVisible bool
+	deleteTargetPane   activePane
+	deleteTargetEntry  Entry
 	pickerModalVisible bool
 	pickerTargetPane   activePane
 	pickerChoiceIndex  int
@@ -78,6 +86,9 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 		searchModalVisible: false,
 		searchInput:        newSearchInput(),
 		searchTargetPane:   paneLeft,
+		deleteModalVisible: false,
+		deleteTargetPane:   paneLeft,
+		deleteTargetEntry:  Entry{},
 		pickerModalVisible: false,
 		pickerTargetPane:   paneLeft,
 		pickerChoiceIndex:  0,
@@ -194,6 +205,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			pane.refreshRows(m.theme)
 		}
 		m.status = fmt.Sprintf("%s: %v", pane.path, typed.err)
+	case paneDeleteResultMsg:
+		if typed.err != nil {
+			m.status = typed.err.Error()
+			break
+		}
+		m.status = ""
+		cmds = append(cmds, m.paneByID(typed.pane).beginLoad(typed.pane))
 	case tea.KeyMsg:
 		handled, keyCmds := m.handleKey(typed)
 		cmds = append(cmds, keyCmds...)
