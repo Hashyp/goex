@@ -28,30 +28,31 @@ type paneLoadErrorMsg struct {
 }
 
 type paneDeleteResultMsg struct {
-	pane activePane
-	err  error
+	pane       activePane
+	deletedIDs []string
+	err        error
 }
 
 type initLoadMsg struct{}
 
 type Model struct {
-	leftPane           Pane
-	rightPane          Pane
-	activePane         activePane
-	themeIndex         int
-	theme              appTheme
-	status             string
-	width              int
-	height             int
-	searchModalVisible bool
-	searchInput        textinput.Model
-	searchTargetPane   activePane
-	deleteModalVisible bool
-	deleteTargetPane   activePane
-	deleteTargetEntry  Entry
-	pickerModalVisible bool
-	pickerTargetPane   activePane
-	pickerChoiceIndex  int
+	leftPane            Pane
+	rightPane           Pane
+	activePane          activePane
+	themeIndex          int
+	theme               appTheme
+	status              string
+	width               int
+	height              int
+	searchModalVisible  bool
+	searchInput         textinput.Model
+	searchTargetPane    activePane
+	deleteModalVisible  bool
+	deleteTargetPane    activePane
+	deleteTargetEntries []Entry
+	pickerModalVisible  bool
+	pickerTargetPane    activePane
+	pickerChoiceIndex   int
 }
 
 func NewModel() Model {
@@ -77,21 +78,21 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 	rightPane := newPane(rightBackend, theme, showHidden)
 
 	model := Model{
-		leftPane:           leftPane,
-		rightPane:          rightPane,
-		activePane:         paneLeft,
-		themeIndex:         themeIndex,
-		theme:              theme,
-		status:             "",
-		searchModalVisible: false,
-		searchInput:        newSearchInput(),
-		searchTargetPane:   paneLeft,
-		deleteModalVisible: false,
-		deleteTargetPane:   paneLeft,
-		deleteTargetEntry:  Entry{},
-		pickerModalVisible: false,
-		pickerTargetPane:   paneLeft,
-		pickerChoiceIndex:  0,
+		leftPane:            leftPane,
+		rightPane:           rightPane,
+		activePane:          paneLeft,
+		themeIndex:          themeIndex,
+		theme:               theme,
+		status:              "",
+		searchModalVisible:  false,
+		searchInput:         newSearchInput(),
+		searchTargetPane:    paneLeft,
+		deleteModalVisible:  false,
+		deleteTargetPane:    paneLeft,
+		deleteTargetEntries: nil,
+		pickerModalVisible:  false,
+		pickerTargetPane:    paneLeft,
+		pickerChoiceIndex:   0,
 	}
 
 	model.setActivePane(paneLeft)
@@ -206,12 +207,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = fmt.Sprintf("%s: %v", pane.path, typed.err)
 	case paneDeleteResultMsg:
+		pane := m.paneByID(typed.pane)
+		pane.clearSelected(typed.deletedIDs)
 		if typed.err != nil {
 			m.status = typed.err.Error()
-			break
+			if len(typed.deletedIDs) == 0 {
+				break
+			}
+		} else {
+			m.status = ""
 		}
-		m.status = ""
-		cmds = append(cmds, m.paneByID(typed.pane).beginLoad(typed.pane))
+		cmds = append(cmds, pane.beginLoad(typed.pane))
 	case tea.KeyMsg:
 		handled, keyCmds := m.handleKey(typed)
 		cmds = append(cmds, keyCmds...)

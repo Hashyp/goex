@@ -52,7 +52,7 @@ See `docs/gcs-emulator.md` for usage details.
 - `Enter` / `l`: enter bucket or virtual folder.
 - `Backspace` / `h`: parent folder; from bucket root goes back to bucket list.
 - `.` toggles hidden entries for active pane.
-- `d` opens delete confirmation for highlighted file/object.
+- `d` opens delete confirmation for selected files/objects (or highlighted file/object when none selected).
   - `y` confirms delete.
   - `n` or `Esc` cancels.
 - Hidden S3 entries are those where any key segment starts with `.`.

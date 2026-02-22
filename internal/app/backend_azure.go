@@ -114,11 +114,15 @@ func (b AzureBlobBackend) Delete(ctx context.Context, state Location, highlighte
 	if azure.Container == "" {
 		return fmt.Errorf("azure container not selected")
 	}
-	if highlighted.FullPath == "" {
+	blobName := highlighted.FullPath
+	if blobName == "" {
+		blobName = highlighted.Name
+	}
+	if blobName == "" {
 		return fmt.Errorf("azure object path is empty")
 	}
 
-	_, err := b.client.DeleteBlob(ctx, azure.Container, highlighted.FullPath, nil)
+	_, err := b.client.DeleteBlob(ctx, azure.Container, blobName, nil)
 	return err
 }
 

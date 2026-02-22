@@ -120,25 +120,29 @@ func (m *Model) closeSearchModal() {
 
 func (m *Model) openDeleteModal() bool {
 	active := m.activePaneRef()
-	highlighted, ok := active.highlightedEntry()
-	if !ok {
-		m.status = "Delete: no file selected"
-		return false
-	}
-	if highlighted.Kind != KindObject {
-		m.status = "Delete: only files/objects are supported"
-		return false
+	entries := active.selectedObjectEntries()
+	if len(entries) == 0 {
+		highlighted, ok := active.highlightedEntry()
+		if !ok {
+			m.status = "Delete: no file selected"
+			return false
+		}
+		if highlighted.Kind != KindObject {
+			m.status = "Delete: only files/objects are supported"
+			return false
+		}
+		entries = append(entries, highlighted)
 	}
 
 	m.deleteModalVisible = true
 	m.deleteTargetPane = m.activePane
-	m.deleteTargetEntry = highlighted
+	m.deleteTargetEntries = entries
 	return true
 }
 
 func (m *Model) closeDeleteModal() {
 	m.deleteModalVisible = false
-	m.deleteTargetEntry = Entry{}
+	m.deleteTargetEntries = nil
 }
 
 func (m *Model) confirmDelete() tea.Cmd {
@@ -146,7 +150,7 @@ func (m *Model) confirmDelete() tea.Cmd {
 	pane := m.paneByID(paneID)
 	backend := pane.backend
 	location := pane.location
-	entry := m.deleteTargetEntry
+	entries := m.deleteTargetEntries
 	timeout := backend.LoadTimeout()
 	if timeout <= 0 {
 		timeout = defaultLoadTimeout
@@ -156,11 +160,19 @@ func (m *Model) confirmDelete() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		if err := backend.Delete(ctx, location, entry); err != nil {
-			return paneDeleteResultMsg{pane: paneID, err: err}
+		deletedIDs := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if err := backend.Delete(ctx, location, entry); err != nil {
+				return paneDeleteResultMsg{
+					pane:       paneID,
+					deletedIDs: deletedIDs,
+					err:        fmt.Errorf("delete %q: %w", entry.Name, err),
+				}
+			}
+			deletedIDs = append(deletedIDs, entry.ID)
 		}
 
-		return paneDeleteResultMsg{pane: paneID}
+		return paneDeleteResultMsg{pane: paneID, deletedIDs: deletedIDs}
 	}
 }
 
