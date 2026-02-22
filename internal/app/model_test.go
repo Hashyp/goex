@@ -20,22 +20,39 @@ func (failingRemoveFS) Remove(string) error {
 	return errors.New("delete failed")
 }
 
+func (failingRemoveFS) RemoveAll(string) error {
+	return errors.New("delete failed")
+}
+
 func runCmd(t *testing.T, model Model, cmd tea.Cmd) Model {
 	t.Helper()
 	current := model
-	nextCmd := cmd
-	for nextCmd != nil {
+	queue := []tea.Cmd{cmd}
+	for len(queue) > 0 {
+		nextCmd := queue[0]
+		queue = queue[1:]
+		if nextCmd == nil {
+			continue
+		}
+
 		msg := nextCmd()
 		if msg == nil {
-			break
+			continue
 		}
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			queue = append(queue, batch...)
+			continue
+		}
+
 		updated, chained := current.Update(msg)
 		nextModel, ok := updated.(Model)
 		if !ok {
 			t.Fatalf("unexpected model type: %T", updated)
 		}
 		current = nextModel
-		nextCmd = chained
+		if chained != nil {
+			queue = append(queue, chained)
+		}
 	}
 
 	return current
@@ -610,19 +627,28 @@ func TestDeleteConfirmRemovesFileAndReloadsPane(t *testing.T) {
 	}
 }
 
-func TestDeleteDoesNotOpenModalForDirectory(t *testing.T) {
+func TestDeleteDirectoryOpensModalAndDeletesRecursively(t *testing.T) {
 	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "alpha"), 0o755); err != nil {
+	alpha := filepath.Join(root, "alpha")
+	if err := os.Mkdir(alpha, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(alpha, "nested.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write nested file: %v", err)
 	}
 
 	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if model.deleteModalVisible {
-		t.Fatal("expected delete modal to remain closed for directory")
+	if !model.deleteModalVisible {
+		t.Fatal("expected delete modal to open for directory")
 	}
-	if model.status != "Delete: only files/objects are supported" {
-		t.Fatalf("unexpected status: %q", model.status)
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to close after confirmation")
+	}
+	if _, err := os.Stat(alpha); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected directory to be deleted recursively, stat err=%v", err)
 	}
 }
 
@@ -640,7 +666,7 @@ func TestDeleteErrorIsShownInStatus(t *testing.T) {
 	if model.deleteModalVisible {
 		t.Fatal("expected delete modal to close on error")
 	}
-	if model.status != "delete \"alpha.txt\": delete failed" {
+	if model.status != "Deleted 0 item(s), failed 1: \"alpha.txt\": delete failed" {
 		t.Fatalf("unexpected status: %q", model.status)
 	}
 	if got := len(model.leftPane.table.GetVisibleRows()); got != 1 {

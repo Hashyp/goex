@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"regexp"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -125,7 +126,7 @@ func (p *Pane) deleteHighlighted(ctx context.Context) (bool, error) {
 }
 
 func (p *Pane) deleteEntry(ctx context.Context, entry Entry) (bool, error) {
-	if entry.Kind != KindObject {
+	if !isDeleteTargetKind(entry.Kind) {
 		return false, nil
 	}
 	if err := p.backend.Delete(ctx, p.location, entry); err != nil {
@@ -135,20 +136,70 @@ func (p *Pane) deleteEntry(ctx context.Context, entry Entry) (bool, error) {
 	return true, nil
 }
 
-func (p *Pane) selectedObjectEntries() []Entry {
+func (p *Pane) selectedDeleteEntries() []Entry {
 	entries := make([]Entry, 0, len(p.entries))
 	for _, entry := range p.entries {
 		if !p.selected[entry.ID] {
 			continue
 		}
-		if entry.Kind != KindObject {
+		if !isDeleteTargetKind(entry.Kind) {
 			continue
 		}
 
 		entries = append(entries, entry)
 	}
 
-	return entries
+	return dedupeDeleteTargets(entries)
+}
+
+func isDeleteTargetKind(kind EntryKind) bool {
+	return kind == KindObject || kind == KindDirectory
+}
+
+func dedupeDeleteTargets(entries []Entry) []Entry {
+	if len(entries) < 2 {
+		return entries
+	}
+
+	directories := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Kind != KindDirectory {
+			continue
+		}
+		path := strings.TrimSuffix(entry.FullPath, "/")
+		path = strings.TrimSuffix(path, "\\")
+		if path == "" {
+			continue
+		}
+		directories = append(directories, path)
+	}
+	if len(directories) == 0 {
+		return entries
+	}
+
+	filtered := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Kind == KindDirectory {
+			filtered = append(filtered, entry)
+			continue
+		}
+
+		skip := false
+		for _, dir := range directories {
+			if entry.FullPath == dir ||
+				strings.HasPrefix(entry.FullPath, dir+"/") ||
+				strings.HasPrefix(entry.FullPath, dir+"\\") {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	return filtered
 }
 
 func (p *Pane) clearSelected(ids []string) {

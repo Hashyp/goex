@@ -114,7 +114,7 @@ func (b LocalBackend) Enter(_ context.Context, state Location, highlighted Entry
 }
 
 func (b LocalBackend) Delete(_ context.Context, state Location, highlighted Entry) error {
-	if highlighted.Kind != KindObject {
+	if !isDeleteTargetKind(highlighted.Kind) {
 		return nil
 	}
 
@@ -124,6 +124,10 @@ func (b LocalBackend) Delete(_ context.Context, state Location, highlighted Entr
 	}
 
 	target := filepath.Join(local.Path, highlighted.Name)
+	if highlighted.Kind == KindDirectory {
+		return b.fs.RemoveAll(target)
+	}
+
 	return b.fs.Remove(target)
 }
 

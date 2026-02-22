@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
@@ -108,7 +110,7 @@ func (b AzureBlobBackend) Delete(ctx context.Context, state Location, highlighte
 	if b.client == nil {
 		return fmt.Errorf("azure client not configured")
 	}
-	if azure.Mode != AzureModeObjects || highlighted.Kind != KindObject {
+	if azure.Mode != AzureModeObjects || !isDeleteTargetKind(highlighted.Kind) {
 		return nil
 	}
 	if azure.Container == "" {
@@ -120,6 +122,10 @@ func (b AzureBlobBackend) Delete(ctx context.Context, state Location, highlighte
 	}
 	if blobName == "" {
 		return fmt.Errorf("azure object path is empty")
+	}
+
+	if highlighted.Kind == KindDirectory {
+		return b.deletePrefixRecursive(ctx, azure.Container, blobName)
 	}
 
 	_, err := b.client.DeleteBlob(ctx, azure.Container, blobName, nil)
@@ -274,4 +280,62 @@ func (b AzureBlobBackend) listObjects(ctx context.Context, containerName string,
 
 func isHiddenBySegment(path string) bool {
 	return hiddenBySegment(path, azureDelimiter)
+}
+
+func (b AzureBlobBackend) deletePrefixRecursive(ctx context.Context, containerName string, prefix string) error {
+	queryPrefix := enterPrefix(prefix, azureDelimiter)
+	blobNames, err := b.listBlobNamesByPrefix(ctx, containerName, queryPrefix)
+	if err != nil {
+		return err
+	}
+
+	// Marker blobs can exist as both "dir" and "dir/".
+	blobNames = append(blobNames, prefix, queryPrefix)
+	blobNames = uniqueStrings(blobNames)
+	for _, blobName := range blobNames {
+		_, err := b.client.DeleteBlob(ctx, containerName, blobName, nil)
+		if err != nil {
+			if isAzureNotFoundError(err) {
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func isAzureNotFoundError(err error) bool {
+	var responseErr *azcore.ResponseError
+	if !errors.As(err, &responseErr) {
+		return false
+	}
+
+	return responseErr.StatusCode == 404 || responseErr.ErrorCode == "BlobNotFound"
+}
+
+func (b AzureBlobBackend) listBlobNamesByPrefix(ctx context.Context, containerName string, prefix string) ([]string, error) {
+	containerClient := b.client.ServiceClient().NewContainerClient(containerName)
+	pager := containerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
+		Prefix: to.Ptr(prefix),
+	})
+
+	blobNames := make([]string, 0)
+	for pager.More() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Segment == nil {
+			continue
+		}
+		for _, item := range resp.Segment.BlobItems {
+			if item == nil || item.Name == nil {
+				continue
+			}
+			blobNames = append(blobNames, *item.Name)
+		}
+	}
+
+	return blobNames, nil
 }
