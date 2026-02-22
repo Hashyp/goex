@@ -135,6 +135,28 @@ func (p *Pane) deleteEntry(ctx context.Context, entry Entry) (bool, error) {
 	return true, nil
 }
 
+func (p *Pane) selectedObjectEntries() []Entry {
+	entries := make([]Entry, 0, len(p.entries))
+	for _, entry := range p.entries {
+		if !p.selected[entry.ID] {
+			continue
+		}
+		if entry.Kind != KindObject {
+			continue
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+func (p *Pane) clearSelected(ids []string) {
+	for _, id := range ids {
+		delete(p.selected, id)
+	}
+}
+
 func (p *Pane) goParent() bool {
 	childName := p.backend.ParentHighlightName(p.location)
 

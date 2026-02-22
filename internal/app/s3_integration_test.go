@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"defaultdevcontainer/internal/s3blob"
 )
@@ -100,6 +101,91 @@ func TestS3BackendListsBucketsAndVirtualFolders(t *testing.T) {
 	}
 	if contains(entryNames(rootEntriesAfterDelete), "root.txt") {
 		t.Fatalf("expected root.txt to be deleted, entries=%v", entryNames(rootEntriesAfterDelete))
+	}
+}
+
+func TestS3ModelDeleteSelectedFiles(t *testing.T) {
+	if os.Getenv("GOEX_RUN_MINIO_TESTS") != "1" {
+		t.Skip("set GOEX_RUN_MINIO_TESTS=1 to run MinIO integration tests")
+	}
+
+	ctx := context.Background()
+	cfg := s3blob.DefaultConfig()
+	client, err := s3blob.NewClient(ctx, cfg)
+	if err != nil {
+		t.Fatalf("create minio s3 client: %v", err)
+	}
+
+	bucketName := fmt.Sprintf("goex-it-%d", time.Now().UnixNano())
+	if err := s3blob.EnsureBucket(ctx, client, bucketName); err != nil {
+		t.Fatalf("ensure test bucket: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupS3Bucket(context.Background(), client, bucketName)
+	})
+
+	putS3Object(t, ctx, client, bucketName, "a.txt", "a")
+	putS3Object(t, ctx, client, bucketName, "b.txt", "b")
+	putS3Object(t, ctx, client, bucketName, "c.txt", "c")
+
+	backend := NewS3Backend(client, cfg.RequestTimeout)
+	model := NewModelWithBackends(backend, backend)
+	model.leftPane.location = S3Location{Mode: S3ModeObjects, Bucket: bucketName, Prefix: ""}
+	model.leftPane.path = backend.DisplayPath(model.leftPane.location)
+	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	remaining, err := backend.List(ctx, S3Location{Mode: S3ModeObjects, Bucket: bucketName, Prefix: ""}, true)
+	if err != nil {
+		t.Fatalf("list after delete: %v", err)
+	}
+	if got := entryNames(remaining); !contains(got, "c.txt") || len(got) != 1 {
+		t.Fatalf("unexpected entries after selected delete: %v", got)
+	}
+}
+
+func TestS3ModelDeleteSingleHighlightedFile(t *testing.T) {
+	if os.Getenv("GOEX_RUN_MINIO_TESTS") != "1" {
+		t.Skip("set GOEX_RUN_MINIO_TESTS=1 to run MinIO integration tests")
+	}
+
+	ctx := context.Background()
+	cfg := s3blob.DefaultConfig()
+	client, err := s3blob.NewClient(ctx, cfg)
+	if err != nil {
+		t.Fatalf("create minio s3 client: %v", err)
+	}
+
+	bucketName := fmt.Sprintf("goex-it-%d", time.Now().UnixNano())
+	if err := s3blob.EnsureBucket(ctx, client, bucketName); err != nil {
+		t.Fatalf("ensure test bucket: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupS3Bucket(context.Background(), client, bucketName)
+	})
+
+	putS3Object(t, ctx, client, bucketName, "a.txt", "a")
+	putS3Object(t, ctx, client, bucketName, "b.txt", "b")
+
+	backend := NewS3Backend(client, cfg.RequestTimeout)
+	model := NewModelWithBackends(backend, backend)
+	model.leftPane.location = S3Location{Mode: S3ModeObjects, Bucket: bucketName, Prefix: ""}
+	model.leftPane.path = backend.DisplayPath(model.leftPane.location)
+	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	remaining, err := backend.List(ctx, S3Location{Mode: S3ModeObjects, Bucket: bucketName, Prefix: ""}, true)
+	if err != nil {
+		t.Fatalf("list after delete: %v", err)
+	}
+	if got := entryNames(remaining); !contains(got, "b.txt") || len(got) != 1 {
+		t.Fatalf("unexpected entries after single delete: %v", got)
 	}
 }
 

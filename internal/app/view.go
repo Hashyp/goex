@@ -56,9 +56,19 @@ func (m Model) deleteModalView() string {
 		Foreground(m.theme.header).
 		Render("Confirm Delete")
 
+	targetLabel := ""
+	switch len(m.deleteTargetEntries) {
+	case 0:
+		targetLabel = "Delete selected file(s)?"
+	case 1:
+		targetLabel = fmt.Sprintf("Delete %q?", m.deleteTargetEntries[0].Name)
+	default:
+		targetLabel = fmt.Sprintf("Delete %d selected files?", len(m.deleteTargetEntries))
+	}
+
 	question := lipgloss.NewStyle().
 		Foreground(m.theme.text).
-		Render(fmt.Sprintf("Delete %q?", m.deleteTargetEntry.Name))
+		Render(targetLabel)
 
 	hint := lipgloss.NewStyle().
 		Foreground(m.theme.text).

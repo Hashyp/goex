@@ -119,13 +119,17 @@ func (b S3Backend) Delete(ctx context.Context, state Location, highlighted Entry
 	if s3Location.Bucket == "" {
 		return fmt.Errorf("s3 bucket not selected")
 	}
-	if highlighted.FullPath == "" {
+	key := highlighted.FullPath
+	if key == "" {
+		key = highlighted.Name
+	}
+	if key == "" {
 		return fmt.Errorf("s3 object key is empty")
 	}
 
 	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s3Location.Bucket),
-		Key:    aws.String(highlighted.FullPath),
+		Key:    aws.String(key),
 	})
 	return err
 }

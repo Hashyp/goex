@@ -120,11 +120,15 @@ func (b GCSBackend) Delete(ctx context.Context, state Location, highlighted Entr
 	if gcsLocation.Bucket == "" {
 		return fmt.Errorf("gcs bucket not selected")
 	}
-	if highlighted.FullPath == "" {
+	objectKey := highlighted.FullPath
+	if objectKey == "" {
+		objectKey = highlighted.Name
+	}
+	if objectKey == "" {
 		return fmt.Errorf("gcs object key is empty")
 	}
 
-	return b.client.Bucket(gcsLocation.Bucket).Object(highlighted.FullPath).Delete(ctx)
+	return b.client.Bucket(gcsLocation.Bucket).Object(objectKey).Delete(ctx)
 }
 
 func (b GCSBackend) Parent(state Location) (Location, bool) {

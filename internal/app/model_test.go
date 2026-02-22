@@ -640,11 +640,54 @@ func TestDeleteErrorIsShownInStatus(t *testing.T) {
 	if model.deleteModalVisible {
 		t.Fatal("expected delete modal to close on error")
 	}
-	if model.status != "delete failed" {
+	if model.status != "delete \"alpha.txt\": delete failed" {
 		t.Fatalf("unexpected status: %q", model.status)
 	}
 	if got := len(model.leftPane.table.GetVisibleRows()); got != 1 {
 		t.Fatalf("expected rows to remain after delete error, got %d", got)
+	}
+}
+
+func TestDeleteConfirmRemovesSelectedFiles(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !model.deleteModalVisible {
+		t.Fatal("expected delete modal to open for selected files")
+	}
+	if got := len(model.deleteTargetEntries); got != 2 {
+		t.Fatalf("expected two delete targets, got %d", got)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to close after confirmation")
+	}
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %q to be deleted, stat err=%v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "c.txt")); err != nil {
+		t.Fatalf("expected c.txt to remain: %v", err)
+	}
+
+	names := visibleNames(model.leftPane.table.GetVisibleRows())
+	if !slices.Equal(names, []string{"c.txt"}) {
+		t.Fatalf("unexpected rows after deleting selection: %v", names)
+	}
+	if got := selectedCount(model.leftPane.selected); got != 0 {
+		t.Fatalf("expected selected count to clear after delete, got %d", got)
 	}
 }
 
