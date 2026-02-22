@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
@@ -22,6 +23,8 @@ const (
 	bulkFilesPerFolder      = 22
 	bulkRootFiles           = 12
 	progressLogEvery        = 250
+	containerPrefix         = "az-"
+	objectPrefix            = "az_"
 )
 
 var baseContainers = []string{
@@ -86,59 +89,81 @@ func seed(ctx context.Context, client *azblob.Client, data []seedBlob) error {
 func generateSeedData() []seedBlob {
 	var data []seedBlob
 
-	for _, container := range baseContainers {
+	for _, baseContainer := range baseContainers {
+		container := prefixedContainer(baseContainer)
 		data = append(data, seedBlob{
 			container: container,
-			name:      "root-file.txt",
+			name:      prefixedPath("root-file.txt"),
 			content:   fmt.Sprintf("container=%s root\n", container),
 		})
 		data = append(data, seedBlob{
 			container: container,
-			name:      ".hidden-root.txt",
+			name:      prefixedPath(".hidden-root.txt"),
 			content:   fmt.Sprintf("hidden root in %s\n", container),
 		})
 		data = append(data, seedBlob{
 			container: container,
-			name:      "configs/.secrets/app.env",
+			name:      prefixedPath("configs/.secrets/app.env"),
 			content:   fmt.Sprintf("CONTAINER=%s\n", container),
 		})
 
 		for rootFileIndex := 1; rootFileIndex <= bulkRootFiles; rootFileIndex++ {
 			data = append(data, seedBlob{
 				container: container,
-				name:      fmt.Sprintf("root-%03d.txt", rootFileIndex),
+				name:      prefixedPath(fmt.Sprintf("root-%03d.txt", rootFileIndex)),
 				content:   fmt.Sprintf("root file %03d for %s\n", rootFileIndex, container),
 			})
 		}
 
 		for folderIndex := 1; folderIndex <= bulkFoldersPerContainer; folderIndex++ {
-			folderName := fmt.Sprintf("folder-%03d", folderIndex)
-
 			for fileIndex := 1; fileIndex <= bulkFilesPerFolder; fileIndex++ {
 				data = append(data, seedBlob{
 					container: container,
-					name:      fmt.Sprintf("%s/file-%03d.txt", folderName, fileIndex),
-					content:   fmt.Sprintf("container=%s folder=%03d file=%03d\n", container, folderIndex, fileIndex),
+					name: prefixedPath(
+						fmt.Sprintf("folder-%03d/file-%03d.txt", folderIndex, fileIndex),
+					),
+					content: fmt.Sprintf("container=%s folder=%03d file=%03d\n", container, folderIndex, fileIndex),
 				})
 			}
 
 			// Hidden segment for toggling hidden-entry behavior in Azure pane.
 			data = append(data, seedBlob{
 				container: container,
-				name:      fmt.Sprintf("%s/.meta/hidden-%03d.json", folderName, folderIndex),
-				content:   fmt.Sprintf("{\"container\":\"%s\",\"folder\":%d}\n", container, folderIndex),
+				name: prefixedPath(
+					fmt.Sprintf("folder-%03d/.meta/hidden-%03d.json", folderIndex, folderIndex),
+				),
+				content: fmt.Sprintf("{\"container\":\"%s\",\"folder\":%d}\n", container, folderIndex),
 			})
 		}
 	}
 
 	// Keep a few semantic samples used in manual UX checks.
 	data = append(data,
-		seedBlob{container: "goex-dev", name: "docs/readme.md", content: "# docs\n"},
-		seedBlob{container: "goex-dev", name: "docs/specs/v1.txt", content: "spec v1\n"},
-		seedBlob{container: "media", name: "images/logo.png", content: "fakepng\n"},
-		seedBlob{container: "media", name: "images/icons/app.svg", content: "<svg></svg>\n"},
-		seedBlob{container: "media", name: "videos/demo.txt", content: "demo\n"},
+		seedBlob{container: prefixedContainer("goex-dev"), name: prefixedPath("docs/readme.md"), content: "# docs\n"},
+		seedBlob{container: prefixedContainer("goex-dev"), name: prefixedPath("docs/specs/v1.txt"), content: "spec v1\n"},
+		seedBlob{container: prefixedContainer("media"), name: prefixedPath("images/logo.png"), content: "fakepng\n"},
+		seedBlob{container: prefixedContainer("media"), name: prefixedPath("images/icons/app.svg"), content: "<svg></svg>\n"},
+		seedBlob{container: prefixedContainer("media"), name: prefixedPath("videos/demo.txt"), content: "demo\n"},
 	)
 
 	return data
+}
+
+func prefixedContainer(name string) string {
+	return containerPrefix + name
+}
+
+func prefixedPath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		parts[i] = prefixedSegment(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+func prefixedSegment(name string) string {
+	if strings.HasPrefix(name, ".") {
+		return "." + objectPrefix + strings.TrimPrefix(name, ".")
+	}
+	return objectPrefix + name
 }

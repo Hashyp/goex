@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
 	"cloud.google.com/go/storage"
 
@@ -22,6 +23,8 @@ const (
 	bulkFilesPerFolder   = 22
 	bulkRootFiles        = 12
 	progressLogEvery     = 250
+	bucketPrefix         = "gcs-"
+	objectPrefix         = "gcs_"
 )
 
 var baseBuckets = []string{
@@ -91,57 +94,79 @@ func seed(ctx context.Context, client *storage.Client, projectID string, data []
 func generateSeedData() []seedObject {
 	var data []seedObject
 
-	for _, bucket := range baseBuckets {
+	for _, baseBucket := range baseBuckets {
+		bucket := prefixedBucket(baseBucket)
 		data = append(data, seedObject{
 			bucket:  bucket,
-			key:     "root-file.txt",
+			key:     prefixedPath("root-file.txt"),
 			content: fmt.Sprintf("bucket=%s root\n", bucket),
 		})
 		data = append(data, seedObject{
 			bucket:  bucket,
-			key:     ".hidden-root.txt",
+			key:     prefixedPath(".hidden-root.txt"),
 			content: fmt.Sprintf("hidden root in %s\n", bucket),
 		})
 		data = append(data, seedObject{
 			bucket:  bucket,
-			key:     "configs/.secrets/app.env",
+			key:     prefixedPath("configs/.secrets/app.env"),
 			content: fmt.Sprintf("BUCKET=%s\n", bucket),
 		})
 
 		for rootFileIndex := 1; rootFileIndex <= bulkRootFiles; rootFileIndex++ {
 			data = append(data, seedObject{
 				bucket:  bucket,
-				key:     fmt.Sprintf("root-%03d.txt", rootFileIndex),
+				key:     prefixedPath(fmt.Sprintf("root-%03d.txt", rootFileIndex)),
 				content: fmt.Sprintf("root file %03d for %s\n", rootFileIndex, bucket),
 			})
 		}
 
 		for folderIndex := 1; folderIndex <= bulkFoldersPerBucket; folderIndex++ {
-			folderName := fmt.Sprintf("folder-%03d", folderIndex)
-
 			for fileIndex := 1; fileIndex <= bulkFilesPerFolder; fileIndex++ {
 				data = append(data, seedObject{
-					bucket:  bucket,
-					key:     fmt.Sprintf("%s/file-%03d.txt", folderName, fileIndex),
+					bucket: bucket,
+					key: prefixedPath(
+						fmt.Sprintf("folder-%03d/file-%03d.txt", folderIndex, fileIndex),
+					),
 					content: fmt.Sprintf("bucket=%s folder=%03d file=%03d\n", bucket, folderIndex, fileIndex),
 				})
 			}
 
 			data = append(data, seedObject{
-				bucket:  bucket,
-				key:     fmt.Sprintf("%s/.meta/hidden-%03d.json", folderName, folderIndex),
+				bucket: bucket,
+				key: prefixedPath(
+					fmt.Sprintf("folder-%03d/.meta/hidden-%03d.json", folderIndex, folderIndex),
+				),
 				content: fmt.Sprintf("{\"bucket\":\"%s\",\"folder\":%d}\n", bucket, folderIndex),
 			})
 		}
 	}
 
 	data = append(data,
-		seedObject{bucket: "goex-dev", key: "docs/readme.md", content: "# docs\n"},
-		seedObject{bucket: "goex-dev", key: "docs/specs/v1.txt", content: "spec v1\n"},
-		seedObject{bucket: "media", key: "images/logo.png", content: "fakepng\n"},
-		seedObject{bucket: "media", key: "images/icons/app.svg", content: "<svg></svg>\n"},
-		seedObject{bucket: "media", key: "videos/demo.txt", content: "demo\n"},
+		seedObject{bucket: prefixedBucket("goex-dev"), key: prefixedPath("docs/readme.md"), content: "# docs\n"},
+		seedObject{bucket: prefixedBucket("goex-dev"), key: prefixedPath("docs/specs/v1.txt"), content: "spec v1\n"},
+		seedObject{bucket: prefixedBucket("media"), key: prefixedPath("images/logo.png"), content: "fakepng\n"},
+		seedObject{bucket: prefixedBucket("media"), key: prefixedPath("images/icons/app.svg"), content: "<svg></svg>\n"},
+		seedObject{bucket: prefixedBucket("media"), key: prefixedPath("videos/demo.txt"), content: "demo\n"},
 	)
 
 	return data
+}
+
+func prefixedBucket(name string) string {
+	return bucketPrefix + name
+}
+
+func prefixedPath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		parts[i] = prefixedSegment(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+func prefixedSegment(name string) string {
+	if strings.HasPrefix(name, ".") {
+		return "." + objectPrefix + strings.TrimPrefix(name, ".")
+	}
+	return objectPrefix + name
 }
