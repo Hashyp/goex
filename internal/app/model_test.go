@@ -592,12 +592,12 @@ func TestDeleteModalCancelsOnEsc(t *testing.T) {
 
 	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if !model.deleteModalVisible {
+	if !model.deleteModal.visible {
 		t.Fatal("expected delete modal to open")
 	}
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
-	if model.deleteModalVisible {
+	if model.deleteModal.visible {
 		t.Fatal("expected delete modal to close on escape")
 	}
 	if _, err := os.Stat(target); err != nil {
@@ -616,7 +616,7 @@ func TestDeleteConfirmRemovesFileAndReloadsPane(t *testing.T) {
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
-	if model.deleteModalVisible {
+	if model.deleteModal.visible {
 		t.Fatal("expected delete modal to close after confirmation")
 	}
 	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
@@ -639,12 +639,12 @@ func TestDeleteDirectoryOpensModalAndDeletesRecursively(t *testing.T) {
 
 	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if !model.deleteModalVisible {
+	if !model.deleteModal.visible {
 		t.Fatal("expected delete modal to open for directory")
 	}
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	if model.deleteModalVisible {
+	if model.deleteModal.visible {
 		t.Fatal("expected delete modal to close after confirmation")
 	}
 	if _, err := os.Stat(alpha); !errors.Is(err, os.ErrNotExist) {
@@ -663,7 +663,7 @@ func TestDeleteErrorIsShownInStatus(t *testing.T) {
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
-	if model.deleteModalVisible {
+	if model.deleteModal.visible {
 		t.Fatal("expected delete modal to close on error")
 	}
 	if model.status != "Deleted 0 item(s), failed 1: \"alpha.txt\": delete failed" {
@@ -687,16 +687,16 @@ func TestDeleteConfirmRemovesSelectedFiles(t *testing.T) {
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if !model.deleteModalVisible {
+	if !model.deleteModal.visible {
 		t.Fatal("expected delete modal to open for selected files")
 	}
-	if got := len(model.deleteTargetEntries); got != 2 {
+	if got := len(model.deleteModal.entries); got != 2 {
 		t.Fatalf("expected two delete targets, got %d", got)
 	}
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
-	if model.deleteModalVisible {
+	if model.deleteModal.visible {
 		t.Fatal("expected delete modal to close after confirmation")
 	}
 	for _, name := range []string{"a.txt", "b.txt"} {

@@ -231,7 +231,7 @@ func TestAzureModelDeleteDirectoryRecursively(t *testing.T) {
 	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
 
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if !model.deleteModalVisible {
+	if !model.deleteModal.visible {
 		t.Fatal("expected delete modal for directory")
 	}
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
