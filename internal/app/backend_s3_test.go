@@ -9,7 +9,7 @@ func TestS3EnterFromBucketListToBucketRoot(t *testing.T) {
 	backend := NewS3Backend(nil, 0)
 	start := S3Location{Mode: S3ModeBuckets}
 
-	next, changed, err := backend.Enter(context.Background(), start, Entry{Name: "goex-dev", Kind: KindContainer})
+	next, changed, err := backend.Enter(context.Background(), start, Entry{Name: "goex-dev", Kind: KindBucket})
 	if err != nil {
 		t.Fatalf("enter returned error: %v", err)
 	}

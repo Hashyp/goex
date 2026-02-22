@@ -9,7 +9,8 @@ import (
 type EntryKind int
 
 const (
-	KindContainer EntryKind = iota
+	KindBucket EntryKind = iota
+	KindContainer
 	KindDirectory
 	KindObject
 )
@@ -25,11 +26,13 @@ type Entry struct {
 }
 
 func (e Entry) IsDirLike() bool {
-	return e.Kind == KindContainer || e.Kind == KindDirectory
+	return e.Kind == KindBucket || e.Kind == KindContainer || e.Kind == KindDirectory
 }
 
 func (e Entry) TypeOrSize() string {
 	switch e.Kind {
+	case KindBucket:
+		return "<BKT>"
 	case KindContainer:
 		return "<CNT>"
 	case KindDirectory:

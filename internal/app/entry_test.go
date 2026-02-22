@@ -114,3 +114,10 @@ func TestToggleHighlightedSelectionUsesEntryID(t *testing.T) {
 		t.Fatal("did not expect second row with same name to be selected")
 	}
 }
+
+func TestTypeOrSizeBucketMarker(t *testing.T) {
+	entry := Entry{Kind: KindBucket}
+	if got := entry.TypeOrSize(); got != "<BKT>" {
+		t.Fatalf("expected bucket marker <BKT>, got %q", got)
+	}
+}

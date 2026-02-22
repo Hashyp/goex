@@ -49,7 +49,7 @@ func TestS3BackendListsBucketsAndVirtualFolders(t *testing.T) {
 
 	var foundBucket bool
 	for _, entry := range buckets {
-		if entry.Name == bucketName && entry.Kind == KindContainer {
+		if entry.Name == bucketName && entry.Kind == KindBucket {
 			foundBucket = true
 			break
 		}

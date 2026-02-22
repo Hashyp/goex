@@ -94,7 +94,7 @@ func (b S3Backend) Enter(_ context.Context, state Location, highlighted Entry) (
 
 	switch s3Location.Mode {
 	case S3ModeBuckets:
-		if highlighted.Kind != KindContainer {
+		if highlighted.Kind != KindBucket {
 			return state, false, nil
 		}
 		return S3Location{Mode: S3ModeObjects, Bucket: highlighted.Name, Prefix: ""}, true, nil
@@ -161,7 +161,7 @@ func (b S3Backend) listBuckets(ctx context.Context, showHidden bool) ([]Entry, e
 			ID:       "bucket:" + name,
 			Name:     name,
 			FullPath: name,
-			Kind:     KindContainer,
+			Kind:     KindBucket,
 		}
 		if bucket.CreationDate != nil {
 			entry.ModTime = *bucket.CreationDate
