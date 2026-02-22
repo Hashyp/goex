@@ -28,6 +28,19 @@ func (e Entry) IsDirLike() bool {
 	return e.Kind == KindContainer || e.Kind == KindDirectory
 }
 
+func (e Entry) TypeOrSize() string {
+	switch e.Kind {
+	case KindContainer:
+		return "<CNT>"
+	case KindDirectory:
+		return "<DIR>"
+	case KindBlob:
+		return formatSize(e.SizeBytes)
+	default:
+		return ""
+	}
+}
+
 func sortEntries(entries []Entry) {
 	slices.SortFunc(entries, func(a, b Entry) int {
 		aDir := a.IsDirLike()

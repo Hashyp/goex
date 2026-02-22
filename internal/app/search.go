@@ -64,11 +64,7 @@ func (p *Pane) refreshRows(theme appTheme) {
 			data[columnKeyName] = name
 		}
 
-		if entry.IsDirLike() {
-			data[columnKeySize] = "<DIR>"
-		} else {
-			data[columnKeySize] = formatSize(entry.SizeBytes)
-		}
+		data[columnKeySize] = entry.TypeOrSize()
 
 		if entry.HasModTime {
 			data[columnKeyDate] = entry.ModTime.Format("2006-01-02")
