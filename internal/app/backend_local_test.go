@@ -30,6 +30,32 @@ func TestLocalDeleteRemovesFile(t *testing.T) {
 	}
 }
 
+func TestLocalDeleteRemovesDirectoryRecursively(t *testing.T) {
+	root := t.TempDir()
+	targetDir := filepath.Join(root, "alpha")
+	if err := os.Mkdir(targetDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	nested := filepath.Join(targetDir, "nested.txt")
+	if err := os.WriteFile(nested, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+
+	backend := NewLocalBackend(OSFileSystem{}, root)
+	err := backend.Delete(context.Background(), LocalLocation{Path: root}, Entry{
+		Name:     "alpha",
+		FullPath: "alpha",
+		Kind:     KindDirectory,
+	})
+	if err != nil {
+		t.Fatalf("delete returned error: %v", err)
+	}
+
+	if _, err := os.Stat(targetDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected directory to be deleted recursively, stat err=%v", err)
+	}
+}
+
 func TestLocalDeleteReturnsInvalidLocation(t *testing.T) {
 	backend := NewLocalBackend(OSFileSystem{}, t.TempDir())
 	err := backend.Delete(context.Background(), AzureLocation{Mode: AzureModeContainers}, Entry{

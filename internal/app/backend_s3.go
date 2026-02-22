@@ -8,10 +8,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const s3Delimiter = "/"
 const maxS3Entries = 20000
+const s3DeleteBatchSize = 1000
 
 type S3Backend struct {
 	client      *s3.Client
@@ -113,7 +115,7 @@ func (b S3Backend) Delete(ctx context.Context, state Location, highlighted Entry
 	if b.client == nil {
 		return fmt.Errorf("s3 client not configured")
 	}
-	if s3Location.Mode != S3ModeObjects || highlighted.Kind != KindObject {
+	if s3Location.Mode != S3ModeObjects || !isDeleteTargetKind(highlighted.Kind) {
 		return nil
 	}
 	if s3Location.Bucket == "" {
@@ -127,11 +129,11 @@ func (b S3Backend) Delete(ctx context.Context, state Location, highlighted Entry
 		return fmt.Errorf("s3 object key is empty")
 	}
 
-	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(s3Location.Bucket),
-		Key:    aws.String(key),
-	})
-	return err
+	if highlighted.Kind == KindDirectory {
+		return b.deletePrefixRecursive(ctx, s3Location.Bucket, key)
+	}
+
+	return b.deleteObject(ctx, s3Location.Bucket, key)
 }
 
 func (b S3Backend) Parent(state Location) (Location, bool) {
@@ -278,4 +280,80 @@ func isHiddenByS3Segment(path string) bool {
 
 func strPtr(value string) *string {
 	return &value
+}
+
+func (b S3Backend) deleteObject(ctx context.Context, bucketName string, key string) error {
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	return err
+}
+
+func (b S3Backend) deletePrefixRecursive(ctx context.Context, bucketName string, prefix string) error {
+	queryPrefix := enterPrefix(prefix, s3Delimiter)
+	keys, err := b.listKeysByPrefix(ctx, bucketName, queryPrefix)
+	if err != nil {
+		return err
+	}
+
+	// Folder marker object can exist as "dir" in some tools.
+	keys = append(keys, prefix, queryPrefix)
+	keys = uniqueStrings(keys)
+	if len(keys) == 0 {
+		return nil
+	}
+
+	for start := 0; start < len(keys); start += s3DeleteBatchSize {
+		end := start + s3DeleteBatchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		batch := keys[start:end]
+
+		identifiers := make([]types.ObjectIdentifier, 0, len(batch))
+		for _, key := range batch {
+			identifiers = append(identifiers, types.ObjectIdentifier{Key: aws.String(key)})
+		}
+
+		resp, err := b.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &types.Delete{
+				Objects: identifiers,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if len(resp.Errors) > 0 {
+			first := resp.Errors[0]
+			return fmt.Errorf("delete object %q failed: %s", aws.ToString(first.Key), aws.ToString(first.Message))
+		}
+	}
+
+	return nil
+}
+
+func (b S3Backend) listKeysByPrefix(ctx context.Context, bucketName string, prefix string) ([]string, error) {
+	pager := s3.NewListObjectsV2Paginator(b.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+		Prefix: aws.String(prefix),
+	})
+
+	keys := make([]string, 0)
+	for pager.HasMorePages() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range resp.Contents {
+			if item.Key == nil {
+				continue
+			}
+			keys = append(keys, *item.Key)
+		}
+	}
+
+	return keys, nil
 }

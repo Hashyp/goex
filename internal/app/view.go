@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+var deleteSpinnerFrames = []string{"|", "/", "-", "\\"}
+
 func renderPane(width, height int, content string) string {
 	return lipgloss.NewStyle().
 		Width(width).
@@ -51,6 +53,33 @@ func (m Model) View() string {
 }
 
 func (m Model) deleteModalView() string {
+	if m.deleteInProgress {
+		title := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.header).
+			Render("Deleting")
+
+		frame := deleteSpinnerFrames[m.deleteProgressFrame%len(deleteSpinnerFrames)]
+		progress := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render(fmt.Sprintf("%s Processing %d/%d item(s)", frame, m.deleteProgressDone+1, m.deleteProgressTotal))
+
+		target := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render(fmt.Sprintf("Current: %q", m.deleteProgressName))
+
+		hint := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render("Deletion is in progress...")
+
+		return lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.border).
+			Padding(1, 2).
+			Width(56).
+			Render(lipgloss.JoinVertical(lipgloss.Left, title, progress, target, hint))
+	}
+
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(m.theme.header).
@@ -59,16 +88,34 @@ func (m Model) deleteModalView() string {
 	targetLabel := ""
 	switch len(m.deleteTargetEntries) {
 	case 0:
-		targetLabel = "Delete selected file(s)?"
+		targetLabel = "Delete selected item(s)?"
 	case 1:
-		targetLabel = fmt.Sprintf("Delete %q?", m.deleteTargetEntries[0].Name)
+		target := m.deleteTargetEntries[0]
+		if target.Kind == KindDirectory {
+			targetLabel = fmt.Sprintf("Delete directory %q recursively?", target.Name)
+		} else {
+			targetLabel = fmt.Sprintf("Delete %q?", target.Name)
+		}
 	default:
-		targetLabel = fmt.Sprintf("Delete %d selected files?", len(m.deleteTargetEntries))
+		var dirCount int
+		var fileCount int
+		for _, entry := range m.deleteTargetEntries {
+			if entry.Kind == KindDirectory {
+				dirCount++
+				continue
+			}
+			fileCount++
+		}
+		targetLabel = fmt.Sprintf("Delete %d item(s) (%d directorie(s), %d file(s))?", len(m.deleteTargetEntries), dirCount, fileCount)
 	}
 
 	question := lipgloss.NewStyle().
 		Foreground(m.theme.text).
 		Render(targetLabel)
+
+	warning := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render("Directories are deleted recursively. This cannot be undone.")
 
 	hint := lipgloss.NewStyle().
 		Foreground(m.theme.text).
@@ -79,7 +126,7 @@ func (m Model) deleteModalView() string {
 		BorderForeground(m.theme.border).
 		Padding(1, 2).
 		Width(56).
-		Render(lipgloss.JoinVertical(lipgloss.Left, title, question, hint))
+		Render(lipgloss.JoinVertical(lipgloss.Left, title, question, warning, hint))
 }
 
 func (m Model) searchModalView() string {

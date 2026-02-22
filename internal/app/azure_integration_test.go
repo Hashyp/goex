@@ -197,6 +197,54 @@ func TestAzureModelDeleteSingleHighlightedFile(t *testing.T) {
 	}
 }
 
+func TestAzureModelDeleteDirectoryRecursively(t *testing.T) {
+	if os.Getenv("GOEX_RUN_AZURITE_TESTS") != "1" {
+		t.Skip("set GOEX_RUN_AZURITE_TESTS=1 to run Azurite integration tests")
+	}
+
+	ctx := context.Background()
+	client, err := azureblob.NewClient()
+	if err != nil {
+		t.Fatalf("create azurite client: %v", err)
+	}
+
+	containerName := fmt.Sprintf("goexit%d", time.Now().UnixNano())
+	if len(containerName) > 63 {
+		containerName = containerName[:63]
+	}
+
+	if err := azureblob.EnsureContainer(ctx, client, containerName); err != nil {
+		t.Fatalf("ensure test container: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = client.DeleteContainer(context.Background(), containerName, nil)
+	})
+
+	uploadBlob(t, ctx, client, containerName, "docs/readme.md", "docs")
+	uploadBlob(t, ctx, client, containerName, "docs/specs/v1.txt", "spec")
+	uploadBlob(t, ctx, client, containerName, "root.txt", "root")
+
+	backend := NewAzureBlobBackend(client)
+	model := NewModelWithBackends(backend, backend)
+	model.leftPane.location = AzureLocation{Mode: AzureModeObjects, Container: containerName, Prefix: ""}
+	model.leftPane.path = backend.DisplayPath(model.leftPane.location)
+	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !model.deleteModalVisible {
+		t.Fatal("expected delete modal for directory")
+	}
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	remaining, err := backend.List(ctx, AzureLocation{Mode: AzureModeObjects, Container: containerName, Prefix: ""}, true)
+	if err != nil {
+		t.Fatalf("list after directory delete: %v", err)
+	}
+	if got := entryNames(remaining); !contains(got, "root.txt") || len(got) != 1 {
+		t.Fatalf("unexpected entries after directory delete: %v", got)
+	}
+}
+
 func uploadBlob(t *testing.T, ctx context.Context, client *azblob.Client, containerName, blobName, content string) {
 	t.Helper()
 	_, err := client.UploadBuffer(ctx, containerName, blobName, []byte(content), nil)

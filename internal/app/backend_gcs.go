@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -114,7 +115,7 @@ func (b GCSBackend) Delete(ctx context.Context, state Location, highlighted Entr
 	if b.client == nil {
 		return fmt.Errorf("gcs client not configured")
 	}
-	if gcsLocation.Mode != GCSModeObjects || highlighted.Kind != KindObject {
+	if gcsLocation.Mode != GCSModeObjects || !isDeleteTargetKind(highlighted.Kind) {
 		return nil
 	}
 	if gcsLocation.Bucket == "" {
@@ -126,6 +127,10 @@ func (b GCSBackend) Delete(ctx context.Context, state Location, highlighted Entr
 	}
 	if objectKey == "" {
 		return fmt.Errorf("gcs object key is empty")
+	}
+
+	if highlighted.Kind == KindDirectory {
+		return b.deletePrefixRecursive(ctx, gcsLocation.Bucket, objectKey)
 	}
 
 	return b.client.Bucket(gcsLocation.Bucket).Object(objectKey).Delete(ctx)
@@ -262,4 +267,47 @@ func (b GCSBackend) listObjects(ctx context.Context, bucketName string, prefix s
 
 func isHiddenByGCSSegment(path string) bool {
 	return hiddenBySegment(path, gcsDelimiter)
+}
+
+func (b GCSBackend) deletePrefixRecursive(ctx context.Context, bucketName string, prefix string) error {
+	queryPrefix := enterPrefix(prefix, gcsDelimiter)
+	objectNames, err := b.listObjectNamesByPrefix(ctx, bucketName, queryPrefix)
+	if err != nil {
+		return err
+	}
+
+	// Marker objects can exist as both "dir" and "dir/".
+	objectNames = append(objectNames, prefix, queryPrefix)
+	objectNames = uniqueStrings(objectNames)
+	for _, objectName := range objectNames {
+		if err := b.client.Bucket(bucketName).Object(objectName).Delete(ctx); err != nil {
+			if errors.Is(err, storage.ErrObjectNotExist) {
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b GCSBackend) listObjectNamesByPrefix(ctx context.Context, bucketName string, prefix string) ([]string, error) {
+	it := b.client.Bucket(bucketName).Objects(ctx, &storage.Query{Prefix: prefix})
+
+	objectNames := make([]string, 0)
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if attrs.Name == "" {
+			continue
+		}
+		objectNames = append(objectNames, attrs.Name)
+	}
+
+	return objectNames, nil
 }

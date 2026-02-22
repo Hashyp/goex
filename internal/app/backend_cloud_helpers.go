@@ -55,3 +55,24 @@ func hiddenBySegment(path, delimiter string) bool {
 
 	return false
 }
+
+func uniqueStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+
+	return unique
+}

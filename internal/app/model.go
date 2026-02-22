@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,7 +31,19 @@ type paneLoadErrorMsg struct {
 type paneDeleteResultMsg struct {
 	pane       activePane
 	deletedIDs []string
-	err        error
+	failed     []deleteFailure
+}
+
+type deleteStepMsg struct {
+	entry Entry
+	err   error
+}
+
+type deleteProgressTickMsg struct{}
+
+type deleteFailure struct {
+	name string
+	err  error
 }
 
 type initLoadMsg struct{}
@@ -50,6 +63,14 @@ type Model struct {
 	deleteModalVisible  bool
 	deleteTargetPane    activePane
 	deleteTargetEntries []Entry
+	deleteInProgress    bool
+	deleteProgressDone  int
+	deleteProgressTotal int
+	deleteProgressName  string
+	deleteProgressFrame int
+	deleteProgressErrs  []deleteFailure
+	deleteProgressIDs   []string
+	deleteDeadline      time.Time
 	pickerModalVisible  bool
 	pickerTargetPane    activePane
 	pickerChoiceIndex   int
@@ -90,6 +111,14 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 		deleteModalVisible:  false,
 		deleteTargetPane:    paneLeft,
 		deleteTargetEntries: nil,
+		deleteInProgress:    false,
+		deleteProgressDone:  0,
+		deleteProgressTotal: 0,
+		deleteProgressName:  "",
+		deleteProgressFrame: 0,
+		deleteProgressErrs:  nil,
+		deleteProgressIDs:   nil,
+		deleteDeadline:      time.Time{},
 		pickerModalVisible:  false,
 		pickerTargetPane:    paneLeft,
 		pickerChoiceIndex:   0,
@@ -209,15 +238,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case paneDeleteResultMsg:
 		pane := m.paneByID(typed.pane)
 		pane.clearSelected(typed.deletedIDs)
-		if typed.err != nil {
-			m.status = typed.err.Error()
-			if len(typed.deletedIDs) == 0 {
-				break
-			}
-		} else {
+		if len(typed.failed) == 0 {
 			m.status = ""
+		} else {
+			first := typed.failed[0]
+			m.status = fmt.Sprintf("Deleted %d item(s), failed %d: %q: %v", len(typed.deletedIDs), len(typed.failed), first.name, first.err)
+		}
+		if len(typed.deletedIDs) == 0 {
+			break
 		}
 		cmds = append(cmds, pane.beginLoad(typed.pane))
+	case deleteStepMsg:
+		if m.deleteInProgress {
+			if typed.err != nil {
+				m.deleteProgressErrs = append(m.deleteProgressErrs, deleteFailure{name: typed.entry.Name, err: typed.err})
+			} else {
+				m.deleteProgressIDs = append(m.deleteProgressIDs, typed.entry.ID)
+			}
+			m.deleteProgressDone++
+			if m.deleteProgressDone < m.deleteProgressTotal {
+				m.deleteProgressName = m.deleteTargetEntries[m.deleteProgressDone].Name
+				cmds = append(cmds, m.nextDeleteStepCmd())
+				break
+			}
+
+			result := paneDeleteResultMsg{
+				pane:       m.deleteTargetPane,
+				deletedIDs: m.deleteProgressIDs,
+				failed:     m.deleteProgressErrs,
+			}
+			m.finishDeleteProgress()
+			cmds = append(cmds, func() tea.Msg { return result })
+		}
+	case deleteProgressTickMsg:
+		if m.deleteInProgress {
+			m.deleteProgressFrame++
+			cmds = append(cmds, deleteProgressTickCmd())
+		}
 	case tea.KeyMsg:
 		handled, keyCmds := m.handleKey(typed)
 		cmds = append(cmds, keyCmds...)

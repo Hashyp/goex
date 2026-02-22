@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -120,15 +121,15 @@ func (m *Model) closeSearchModal() {
 
 func (m *Model) openDeleteModal() bool {
 	active := m.activePaneRef()
-	entries := active.selectedObjectEntries()
+	entries := active.selectedDeleteEntries()
 	if len(entries) == 0 {
 		highlighted, ok := active.highlightedEntry()
 		if !ok {
-			m.status = "Delete: no file selected"
+			m.status = "Delete: no entry selected"
 			return false
 		}
-		if highlighted.Kind != KindObject {
-			m.status = "Delete: only files/objects are supported"
+		if !isDeleteTargetKind(highlighted.Kind) {
+			m.status = "Delete: only files/objects and directories are supported"
 			return false
 		}
 		entries = append(entries, highlighted)
@@ -143,36 +144,89 @@ func (m *Model) openDeleteModal() bool {
 func (m *Model) closeDeleteModal() {
 	m.deleteModalVisible = false
 	m.deleteTargetEntries = nil
+	m.deleteInProgress = false
+	m.deleteProgressDone = 0
+	m.deleteProgressTotal = 0
+	m.deleteProgressName = ""
+	m.deleteProgressFrame = 0
+	m.deleteProgressErrs = nil
+	m.deleteProgressIDs = nil
+	m.deleteDeadline = time.Time{}
 }
 
-func (m *Model) confirmDelete() tea.Cmd {
-	paneID := m.deleteTargetPane
-	pane := m.paneByID(paneID)
-	backend := pane.backend
-	location := pane.location
-	entries := m.deleteTargetEntries
-	timeout := backend.LoadTimeout()
+func (m *Model) finishDeleteProgress() {
+	m.deleteInProgress = false
+	m.deleteProgressDone = 0
+	m.deleteProgressTotal = 0
+	m.deleteProgressName = ""
+	m.deleteProgressFrame = 0
+	m.deleteProgressErrs = nil
+	m.deleteProgressIDs = nil
+	m.deleteDeadline = time.Time{}
+	m.deleteModalVisible = false
+	m.deleteTargetEntries = nil
+}
+
+func deleteProgressTickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg {
+		return deleteProgressTickMsg{}
+	})
+}
+
+func (m *Model) startDeleteProgress() []tea.Cmd {
+	pane := m.paneByID(m.deleteTargetPane)
+	timeout := pane.backend.LoadTimeout()
 	if timeout <= 0 {
 		timeout = defaultLoadTimeout
 	}
 
+	m.deleteInProgress = true
+	m.deleteProgressDone = 0
+	m.deleteProgressTotal = len(m.deleteTargetEntries)
+	m.deleteProgressFrame = 0
+	m.deleteProgressErrs = make([]deleteFailure, 0)
+	m.deleteProgressIDs = make([]string, 0, len(m.deleteTargetEntries))
+	m.deleteDeadline = time.Now().Add(timeout)
+	if m.deleteProgressTotal > 0 {
+		m.deleteProgressName = m.deleteTargetEntries[0].Name
+	} else {
+		m.deleteProgressName = ""
+	}
+
+	cmds := []tea.Cmd{deleteProgressTickCmd()}
+	if m.deleteProgressTotal > 0 {
+		cmds = append(cmds, m.nextDeleteStepCmd())
+	} else {
+		result := paneDeleteResultMsg{pane: m.deleteTargetPane}
+		cmds = append(cmds, func() tea.Msg { return result })
+	}
+
+	return cmds
+}
+
+func (m *Model) nextDeleteStepCmd() tea.Cmd {
+	pane := m.paneByID(m.deleteTargetPane)
+	backend := pane.backend
+	location := pane.location
+	index := m.deleteProgressDone
+	if index < 0 || index >= len(m.deleteTargetEntries) {
+		return nil
+	}
+	entry := m.deleteTargetEntries[index]
+	deadline := m.deleteDeadline
+
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx := context.Background()
+		var cancel context.CancelFunc
+		if !deadline.IsZero() {
+			ctx, cancel = context.WithDeadline(context.Background(), deadline)
+		} else {
+			ctx, cancel = context.WithCancel(context.Background())
+		}
 		defer cancel()
 
-		deletedIDs := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			if err := backend.Delete(ctx, location, entry); err != nil {
-				return paneDeleteResultMsg{
-					pane:       paneID,
-					deletedIDs: deletedIDs,
-					err:        fmt.Errorf("delete %q: %w", entry.Name, err),
-				}
-			}
-			deletedIDs = append(deletedIDs, entry.ID)
-		}
-
-		return paneDeleteResultMsg{pane: paneID, deletedIDs: deletedIDs}
+		err := backend.Delete(ctx, location, entry)
+		return deleteStepMsg{entry: entry, err: err}
 	}
 }
 
@@ -316,11 +370,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 }
 
 func (m *Model) handleDeleteModalKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
+	if m.deleteInProgress {
+		return true, nil
+	}
+
 	switch msg.String() {
 	case "y", "Y", "shift+y":
-		cmd := m.confirmDelete()
-		m.closeDeleteModal()
-		return true, []tea.Cmd{cmd}
+		return true, m.startDeleteProgress()
 	case "n", "N", "shift+n", "esc":
 		m.closeDeleteModal()
 		return true, nil

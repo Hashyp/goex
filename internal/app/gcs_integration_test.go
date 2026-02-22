@@ -192,6 +192,52 @@ func TestGCSModelDeleteSingleHighlightedFile(t *testing.T) {
 	}
 }
 
+func TestGCSModelDeleteDirectoryRecursively(t *testing.T) {
+	if os.Getenv("GOEX_RUN_GCS_TESTS") != "1" {
+		t.Skip("set GOEX_RUN_GCS_TESTS=1 to run GCS emulator integration tests")
+	}
+
+	ctx := context.Background()
+	cfg := gcsblob.DefaultConfig()
+	client, err := gcsblob.NewClient(ctx, cfg)
+	if err != nil {
+		t.Fatalf("create gcs client: %v", err)
+	}
+	defer client.Close()
+
+	bucketName := fmt.Sprintf("goex-it-%d", time.Now().UnixNano())
+	if err := gcsblob.EnsureBucket(ctx, client, cfg.ProjectID, bucketName); err != nil {
+		t.Fatalf("ensure test bucket: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupGCSBucket(context.Background(), client, bucketName)
+	})
+
+	putGCSObject(t, ctx, client, bucketName, "docs/readme.md", "docs")
+	putGCSObject(t, ctx, client, bucketName, "docs/specs/v1.txt", "spec")
+	putGCSObject(t, ctx, client, bucketName, "root.txt", "root")
+
+	backend := NewGCSBackend(client, cfg.ProjectID, cfg.RequestTimeout)
+	model := NewModelWithBackends(backend, backend)
+	model.leftPane.location = GCSLocation{Mode: GCSModeObjects, Bucket: bucketName, Prefix: ""}
+	model.leftPane.path = backend.DisplayPath(model.leftPane.location)
+	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !model.deleteModalVisible {
+		t.Fatal("expected delete modal for directory")
+	}
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	remaining, err := backend.List(ctx, GCSLocation{Mode: GCSModeObjects, Bucket: bucketName, Prefix: ""}, true)
+	if err != nil {
+		t.Fatalf("list after directory delete: %v", err)
+	}
+	if got := entryNames(remaining); !contains(got, "root.txt") || len(got) != 1 {
+		t.Fatalf("unexpected entries after directory delete: %v", got)
+	}
+}
+
 func putGCSObject(t *testing.T, ctx context.Context, client *storage.Client, bucket, key, content string) {
 	t.Helper()
 	writer := client.Bucket(bucket).Object(key).NewWriter(ctx)
