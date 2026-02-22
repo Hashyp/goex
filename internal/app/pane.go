@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -101,13 +99,7 @@ func (p *Pane) enterHighlighted(ctx context.Context) (bool, error) {
 }
 
 func (p *Pane) goParent() bool {
-	childName := p.highlightedName()
-	if local, ok := p.location.(LocalLocation); ok {
-		childName = filepathBase(local.Path)
-	}
-	if azure, ok := p.location.(AzureLocation); ok && azure.Mode == AzureModeObjects {
-		childName = azureCurrentName(azure)
-	}
+	childName := p.backend.ParentHighlightName(p.location)
 
 	nextLocation, changed := p.backend.Parent(p.location)
 	if !changed {
@@ -204,7 +196,12 @@ func (p *Pane) beginLoad(pane activePane) tea.Cmd {
 	showHidden := p.showHidden
 
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		timeout := backend.LoadTimeout()
+		if timeout <= 0 {
+			timeout = defaultLoadTimeout
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		entries, err := backend.List(ctx, location, showHidden)
@@ -215,23 +212,4 @@ func (p *Pane) beginLoad(pane activePane) tea.Cmd {
 	}
 }
 
-const loadTimeout = 10 * time.Second
-
-func filepathBase(path string) string {
-	base := filepath.Base(path)
-	if base == "." || base == string(filepath.Separator) {
-		return ""
-	}
-
-	return base
-}
-
-func azureCurrentName(location AzureLocation) string {
-	trimmed := strings.TrimSuffix(location.Prefix, azureDelimiter)
-	if trimmed == "" {
-		return location.Container
-	}
-
-	parts := strings.Split(trimmed, azureDelimiter)
-	return parts[len(parts)-1]
-}
+const defaultLoadTimeout = 10 * time.Second

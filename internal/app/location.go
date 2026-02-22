@@ -24,3 +24,18 @@ type AzureLocation struct {
 }
 
 func (AzureLocation) isLocation() {}
+
+type S3Mode string
+
+const (
+	S3ModeBuckets S3Mode = "buckets"
+	S3ModeObjects S3Mode = "objects"
+)
+
+type S3Location struct {
+	Mode   S3Mode
+	Bucket string
+	Prefix string
+}
+
+func (S3Location) isLocation() {}

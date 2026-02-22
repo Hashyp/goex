@@ -177,6 +177,10 @@ func (m *Model) handleSearchModalKey(msg tea.KeyMsg) (handled bool, cmds []tea.C
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
+	if m.pickerModalVisible {
+		return m.handlePanePickerModalKey(msg)
+	}
+
 	if m.searchModalVisible {
 		return m.handleSearchModalKey(msg)
 	}
@@ -189,6 +193,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, nil
 	case "/":
 		m.openSearchModal()
+		return true, nil
+	case "p":
+		m.openPanePickerModal()
 		return true, nil
 	case "tab", "shift+tab":
 		if m.activePane == paneLeft {
@@ -240,5 +247,29 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, nil
 	default:
 		return false, nil
+	}
+}
+
+func (m *Model) handlePanePickerModalKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		choice := paneBackendChoices[m.pickerChoiceIndex]
+		target := m.pickerTargetPane
+		m.closePanePickerModal()
+		return true, []tea.Cmd{m.switchPaneBackend(target, choice)}
+	case "esc":
+		m.closePanePickerModal()
+		return true, nil
+	case "up", "k":
+		m.shiftPanePickerChoice(-1)
+		return true, nil
+	case "down", "j", "tab":
+		m.shiftPanePickerChoice(1)
+		return true, nil
+	case "shift+tab":
+		m.shiftPanePickerChoice(-1)
+		return true, nil
+	default:
+		return true, nil
 	}
 }

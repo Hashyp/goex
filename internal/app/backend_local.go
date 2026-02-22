@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type LocalBackend struct {
@@ -29,6 +30,24 @@ func (b LocalBackend) DisplayPath(state Location) string {
 	return local.Path
 }
 
+func (b LocalBackend) ParentHighlightName(state Location) string {
+	local, ok := state.(LocalLocation)
+	if !ok {
+		return ""
+	}
+
+	base := filepath.Base(local.Path)
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+
+	return base
+}
+
+func (b LocalBackend) LoadTimeout() time.Duration {
+	return 10 * time.Second
+}
+
 func (b LocalBackend) List(_ context.Context, state Location, showHidden bool) ([]Entry, error) {
 	local, ok := state.(LocalLocation)
 	if !ok {
@@ -51,7 +70,7 @@ func (b LocalBackend) List(_ context.Context, state Location, showHidden bool) (
 			continue
 		}
 
-		kind := KindBlob
+		kind := KindObject
 		if info.IsDir() {
 			kind = KindDirectory
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -41,6 +42,25 @@ func (b AzureBlobBackend) DisplayPath(state Location) string {
 	}
 
 	return fmt.Sprintf("azure:/%s/%s", azure.Container, prefix)
+}
+
+func (b AzureBlobBackend) ParentHighlightName(state Location) string {
+	azure, ok := state.(AzureLocation)
+	if !ok || azure.Mode != AzureModeObjects {
+		return ""
+	}
+
+	trimmed := strings.TrimSuffix(azure.Prefix, azureDelimiter)
+	if trimmed == "" {
+		return azure.Container
+	}
+
+	parts := strings.Split(trimmed, azureDelimiter)
+	return parts[len(parts)-1]
+}
+
+func (b AzureBlobBackend) LoadTimeout() time.Duration {
+	return 30 * time.Second
 }
 
 func (b AzureBlobBackend) List(ctx context.Context, state Location, showHidden bool) ([]Entry, error) {
@@ -222,7 +242,7 @@ func (b AzureBlobBackend) listObjects(ctx context.Context, containerName string,
 				ID:       "blob:" + containerName + "/" + fullName,
 				Name:     displayName,
 				FullPath: fullName,
-				Kind:     KindBlob,
+				Kind:     KindObject,
 			}
 			if item.Properties != nil {
 				if item.Properties.ContentLength != nil {

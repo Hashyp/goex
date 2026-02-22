@@ -11,7 +11,7 @@ type EntryKind int
 const (
 	KindContainer EntryKind = iota
 	KindDirectory
-	KindBlob
+	KindObject
 )
 
 type Entry struct {
@@ -34,7 +34,7 @@ func (e Entry) TypeOrSize() string {
 		return "<CNT>"
 	case KindDirectory:
 		return "<DIR>"
-	case KindBlob:
+	case KindObject:
 		return formatSize(e.SizeBytes)
 	default:
 		return ""

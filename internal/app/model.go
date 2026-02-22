@@ -3,12 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"defaultdevcontainer/internal/azureblob"
+	"github.com/evertras/bubble-table/table"
 )
 
 type activePane int
@@ -44,25 +42,16 @@ type Model struct {
 	searchModalVisible bool
 	searchInput        textinput.Model
 	searchTargetPane   activePane
+	pickerModalVisible bool
+	pickerTargetPane   activePane
+	pickerChoiceIndex  int
 }
 
 func NewModel() Model {
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "."
-	}
-
-	localBackend := NewLocalBackend(OSFileSystem{}, cwd)
-
-	var rightBackend PaneBackend
-	azureClient, err := azureblob.NewClient()
-	if err != nil {
-		rightBackend = NewStaticErrorBackend(fmt.Errorf("failed to initialize azure client: %w", err))
-	} else {
-		rightBackend = NewAzureBlobBackend(azureClient)
-	}
-
-	return NewModelWithBackends(localBackend, rightBackend)
+	cwd := currentWorkingDirectory()
+	leftBackend := paneBackendForChoice(paneBackendFilesystem, cwd)
+	rightBackend := paneBackendForChoice(paneBackendS3, cwd)
+	return NewModelWithBackends(leftBackend, rightBackend)
 }
 
 func NewModelWithFS(fs FileSystem, startPath string) Model {
@@ -90,11 +79,71 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 		searchModalVisible: false,
 		searchInput:        newSearchInput(),
 		searchTargetPane:   paneLeft,
+		pickerModalVisible: false,
+		pickerTargetPane:   paneLeft,
+		pickerChoiceIndex:  0,
 	}
 
 	model.setActivePane(paneLeft)
 	model.updateFooter()
 	return model
+}
+
+func (m *Model) openPanePickerModal() {
+	target := m.activePane
+	pane := m.paneByID(target)
+	choice := paneBackendChoiceFromPane(*pane)
+
+	m.pickerModalVisible = true
+	m.pickerTargetPane = target
+	m.pickerChoiceIndex = findPaneBackendChoiceIndex(choice)
+}
+
+func (m *Model) closePanePickerModal() {
+	m.pickerModalVisible = false
+}
+
+func (m *Model) shiftPanePickerChoice(delta int) {
+	total := len(paneBackendChoices)
+	if total == 0 {
+		m.pickerChoiceIndex = 0
+		return
+	}
+
+	next := (m.pickerChoiceIndex + delta) % total
+	if next < 0 {
+		next += total
+	}
+	m.pickerChoiceIndex = next
+}
+
+func (m *Model) switchPaneBackend(target activePane, choice paneBackendChoice) tea.Cmd {
+	pane := m.paneByID(target)
+	localStartPath := currentWorkingDirectory()
+	if local, ok := pane.location.(LocalLocation); ok && local.Path != "" {
+		localStartPath = local.Path
+	}
+
+	backend := paneBackendForChoice(choice, localStartPath)
+	location := backend.InitialLocation()
+
+	pane.backend = backend
+	pane.location = location
+	pane.path = backend.DisplayPath(location)
+	pane.selected = map[string]bool{}
+	pane.entries = []Entry{}
+	pane.searchQuery = ""
+	pane.searchRegex = nil
+	pane.matchIndexes = nil
+	pane.isLoading = false
+	pane.loadErr = nil
+	pane.loadSeq = 0
+	pane.pendingHighlightName = ""
+	pane.table = createTable([]table.Row{}, m.theme, pane.selected)
+
+	m.setActivePane(m.activePane)
+	m.status = fmt.Sprintf("%s pane backend: %s", paneName(target), paneBackendLabel(choice))
+	return pane.beginLoad(target)
 }
 
 func (m Model) Init() tea.Cmd {

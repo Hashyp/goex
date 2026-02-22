@@ -3,14 +3,16 @@
 `goex` is a terminal-based dual-pane file browser built with Bubble Tea.
 
 - Left pane: local filesystem.
-- Right pane: Azure Blob storage (Azurite by default).
+- Right pane: S3-compatible storage (MinIO by default).
 
 ## Repository Layout
 
 - `cmd/goex`: executable entrypoint
 - `cmd/seed-azurite`: seed Azurite with demo containers/blobs
+- `cmd/seed-minio`: seed MinIO with demo buckets/objects
 - `internal/app`: application logic and tests
 - `internal/azureblob`: shared Azure client/bootstrap helpers
+- `internal/s3blob`: shared S3 client/bootstrap helpers
 - `docs`: architecture and repository documentation
 - `scripts`: repeatable local/devcontainer command wrappers
 - `configs`: non-secret configuration templates and examples
@@ -28,37 +30,53 @@ go run ./cmd/goex
 go test ./...
 ```
 
-## Azure Right Pane Behavior
+## S3 Right Pane Behavior
 
-- Starts at Azure container list (`azure:/`).
-- `Enter` / `l`: enter container or virtual folder.
-- `Backspace` / `h`: parent folder; from container root goes back to container list.
+- Starts at S3 bucket list (`s3:///`).
+- `Enter` / `l`: enter bucket or virtual folder.
+- `Backspace` / `h`: parent folder; from bucket root goes back to bucket list.
 - `.` toggles hidden entries for active pane.
-- Hidden Azure entries are those where any path segment starts with `.`.
+- Hidden S3 entries are those where any key segment starts with `.`.
 - `r` retries loading active pane (useful after connectivity errors).
+- `p` opens backend picker modal for the active pane (file system / azure / s3).
+  - `Enter` applies selected backend to that pane.
+  - `Esc` closes modal without changes.
+  - Both panes can use the same backend at the same time.
 
-If Azure is unavailable, app still runs:
+If S3 is unavailable, app still runs:
 - left pane stays functional,
 - right pane shows an error state and can be retried with `r`.
 
-## Azurite Setup and Seed
+## MinIO Setup and Seed
 
-Start Azurite blob endpoint:
+Start MinIO:
 
 ```bash
-docker run --rm -p 10000:10000 mcr.microsoft.com/azure-storage/azurite:3.33.0 azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+docker run --rm -p 9000:9000 -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio server /data --console-address :9001
 ```
 
 Seed demo data:
 
 ```bash
-go run ./cmd/seed-azurite
+go run ./cmd/seed-minio
 ```
 
-## Integration Tests (Azurite)
+S3 client runtime defaults (override with env vars):
 
-Azurite integration tests are opt-in locally:
+- `GOEX_S3_ENDPOINT` (default `http://127.0.0.1:9000`)
+- `GOEX_S3_REGION` (default `us-east-1`)
+- `GOEX_S3_ACCESS_KEY` (default `minioadmin`)
+- `GOEX_S3_SECRET_KEY` (default `minioadmin`)
+- `GOEX_S3_PATH_STYLE` (default `true`)
+- `GOEX_S3_REQUEST_TIMEOUT` (default `30s`)
+
+## Integration Tests (MinIO)
+
+MinIO integration tests are opt-in locally:
 
 ```bash
-GOEX_RUN_AZURITE_TESTS=1 go test ./...
+GOEX_RUN_MINIO_TESTS=1 go test ./...
 ```

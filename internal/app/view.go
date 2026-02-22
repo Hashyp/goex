@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -22,7 +23,10 @@ func (m Model) View() string {
 
 	paneHeight := m.paneHeight()
 	var modal string
-	if m.searchModalVisible {
+	if m.pickerModalVisible {
+		modal = m.panePickerModalView()
+		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
+	} else if m.searchModalVisible {
 		modal = m.searchModalView()
 		// Keep tables visible while modal is open.
 		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
@@ -36,7 +40,7 @@ func (m Model) View() string {
 
 	tables := lipgloss.JoinHorizontal(lipgloss.Top, leftPaneView, rightPaneView)
 	background := lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, tables)
-	if !m.searchModalVisible {
+	if !m.searchModalVisible && !m.pickerModalVisible {
 		return background
 	}
 
@@ -59,6 +63,40 @@ func (m Model) searchModalView() string {
 		Padding(1, 2).
 		Width(60).
 		Render(lipgloss.JoinVertical(lipgloss.Left, title, m.searchInput.View(), hint))
+}
+
+func (m Model) panePickerModalView() string {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.header).
+		Render(fmt.Sprintf("Select Backend (%s pane)", paneName(m.pickerTargetPane)))
+
+	rows := make([]string, 0, len(paneBackendChoices))
+	for index, choice := range paneBackendChoices {
+		label := paneBackendLabel(choice)
+		prefix := "  "
+		style := lipgloss.NewStyle().Foreground(m.theme.text)
+		if index == m.pickerChoiceIndex {
+			prefix = "> "
+			style = style.
+				Foreground(m.theme.highlightFG).
+				Background(m.theme.highlightBG).
+				Bold(true)
+		}
+		rows = append(rows, style.Render(prefix+label))
+	}
+
+	hint := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render("up/down or j/k: move  enter: accept  esc: cancel")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, append([]string{title}, rows...)...)
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.border).
+		Padding(1, 2).
+		Width(56).
+		Render(lipgloss.JoinVertical(lipgloss.Left, content, hint))
 }
 
 func overlayCentered(background, overlay string, width, height int) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -40,8 +41,16 @@ func (b *fakeBackend) DisplayPath(_ Location) string {
 	return "fake:/"
 }
 
+func (b *fakeBackend) ParentHighlightName(_ Location) string {
+	return ""
+}
+
+func (b *fakeBackend) LoadTimeout() time.Duration {
+	return 5 * time.Second
+}
+
 func TestModelInitKeepsRunningWhenRightPaneLoadFails(t *testing.T) {
-	left := &fakeBackend{location: LocalLocation{Path: "/left"}, entries: []Entry{{ID: "left:file", Name: "file", Kind: KindBlob}}}
+	left := &fakeBackend{location: LocalLocation{Path: "/left"}, entries: []Entry{{ID: "left:file", Name: "file", Kind: KindObject}}}
 	right := &fakeBackend{location: AzureLocation{Mode: AzureModeContainers}, failCount: 1}
 
 	model := NewModelWithBackends(left, right)
@@ -60,7 +69,7 @@ func TestModelInitKeepsRunningWhenRightPaneLoadFails(t *testing.T) {
 }
 
 func TestRetryReloadsFailedPane(t *testing.T) {
-	left := &fakeBackend{location: LocalLocation{Path: "/left"}, entries: []Entry{{ID: "left:file", Name: "file", Kind: KindBlob}}}
+	left := &fakeBackend{location: LocalLocation{Path: "/left"}, entries: []Entry{{ID: "left:file", Name: "file", Kind: KindObject}}}
 	right := &fakeBackend{
 		location:  AzureLocation{Mode: AzureModeContainers},
 		failCount: 1,

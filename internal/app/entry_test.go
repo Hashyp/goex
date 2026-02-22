@@ -8,10 +8,10 @@ import (
 
 func TestSortEntriesDirectoriesFirstThenAlphabetical(t *testing.T) {
 	entries := []Entry{
-		{Name: "z.txt", Kind: KindBlob},
+		{Name: "z.txt", Kind: KindObject},
 		{Name: "beta", Kind: KindDirectory},
 		{Name: "alpha", Kind: KindDirectory},
-		{Name: "a.txt", Kind: KindBlob},
+		{Name: "a.txt", Kind: KindObject},
 		{Name: "cont", Kind: KindContainer},
 	}
 
@@ -51,7 +51,7 @@ func TestRefreshRowsMapsEntryFieldsToColumns(t *testing.T) {
 			ID:         "blob:file.txt",
 			Name:       "file.txt",
 			FullPath:   "file.txt",
-			Kind:       KindBlob,
+			Kind:       KindObject,
 			SizeBytes:  1536,
 			ModTime:    modTime,
 			HasModTime: true,

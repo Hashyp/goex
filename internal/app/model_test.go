@@ -278,6 +278,84 @@ func TestEscapeInSearchModalCancelsModal(t *testing.T) {
 	}
 }
 
+func TestPanePickerEscapeClosesWithoutChangingPane(t *testing.T) {
+	root := t.TempDir()
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+
+	beforePath := model.leftPane.path
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	if !model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to open")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to close on escape")
+	}
+	if model.leftPane.path != beforePath {
+		t.Fatalf("expected left pane path unchanged, got %q want %q", model.leftPane.path, beforePath)
+	}
+	if _, ok := model.leftPane.location.(LocalLocation); !ok {
+		t.Fatalf("expected left pane location to remain local, got %T", model.leftPane.location)
+	}
+}
+
+func TestPanePickerCanSwitchRightPaneToS3(t *testing.T) {
+	root := t.TempDir()
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	if !model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to open")
+	}
+
+	// file system -> azure -> s3
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to close after apply")
+	}
+	if got := model.rightPane.path; got != "s3:///" {
+		t.Fatalf("expected right pane s3 path, got %q", got)
+	}
+	loc, ok := model.rightPane.location.(S3Location)
+	if !ok {
+		t.Fatalf("expected right pane location to be S3, got %T", model.rightPane.location)
+	}
+	if loc.Mode != S3ModeBuckets {
+		t.Fatalf("expected right pane in buckets mode, got %+v", loc)
+	}
+}
+
+func TestPanePickerAllowsSameBackendOnBothPanes(t *testing.T) {
+	root := t.TempDir()
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+
+	// Switch left pane to S3.
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Switch right pane to S3 as well.
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if _, ok := model.leftPane.location.(S3Location); !ok {
+		t.Fatalf("expected left pane location to be S3, got %T", model.leftPane.location)
+	}
+	if _, ok := model.rightPane.location.(S3Location); !ok {
+		t.Fatalf("expected right pane location to be S3, got %T", model.rightPane.location)
+	}
+}
+
 func TestSearchDoesNotReorderRows(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"zzz.txt", "alpha.txt", "middle.txt", "beta.txt"} {

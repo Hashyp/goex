@@ -3,18 +3,33 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 type StaticErrorBackend struct {
-	err error
+	err         error
+	location    Location
+	displayPath string
 }
 
 func NewStaticErrorBackend(err error) StaticErrorBackend {
-	return StaticErrorBackend{err: err}
+	return NewStaticErrorBackendWithLocation(err, AzureLocation{Mode: AzureModeContainers}, "azure:/")
+}
+
+func NewStaticErrorBackendWithLocation(err error, location Location, displayPath string) StaticErrorBackend {
+	return StaticErrorBackend{
+		err:         err,
+		location:    location,
+		displayPath: displayPath,
+	}
 }
 
 func (b StaticErrorBackend) InitialLocation() Location {
-	return AzureLocation{Mode: AzureModeContainers}
+	if b.location == nil {
+		return AzureLocation{Mode: AzureModeContainers}
+	}
+
+	return b.location
 }
 
 func (b StaticErrorBackend) List(_ context.Context, _ Location, _ bool) ([]Entry, error) {
@@ -32,6 +47,18 @@ func (b StaticErrorBackend) Parent(state Location) (Location, bool) {
 	return state, false
 }
 
+func (b StaticErrorBackend) ParentHighlightName(_ Location) string {
+	return ""
+}
+
 func (b StaticErrorBackend) DisplayPath(_ Location) string {
-	return "azure:/"
+	if b.displayPath == "" {
+		return "backend:/"
+	}
+
+	return b.displayPath
+}
+
+func (b StaticErrorBackend) LoadTimeout() time.Duration {
+	return 10 * time.Second
 }
