@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/evertras/bubble-table/table"
 )
 
 type activePane int
@@ -125,21 +124,7 @@ func (m *Model) switchPaneBackend(target activePane, choice paneBackendChoice) t
 	}
 
 	backend := paneBackendForChoice(choice, localStartPath)
-	location := backend.InitialLocation()
-
-	pane.backend = backend
-	pane.location = location
-	pane.path = backend.DisplayPath(location)
-	pane.selected = map[string]bool{}
-	pane.entries = []Entry{}
-	pane.searchQuery = ""
-	pane.searchRegex = nil
-	pane.matchIndexes = nil
-	pane.isLoading = false
-	pane.loadErr = nil
-	pane.loadSeq = 0
-	pane.pendingHighlightName = ""
-	pane.table = createTable([]table.Row{}, m.theme, pane.selected)
+	pane.reset(backend, m.theme)
 
 	m.setActivePane(m.activePane)
 	m.status = fmt.Sprintf("%s pane backend: %s", paneName(target), paneBackendLabel(choice))

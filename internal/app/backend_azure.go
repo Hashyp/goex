@@ -50,13 +50,7 @@ func (b AzureBlobBackend) ParentHighlightName(state Location) string {
 		return ""
 	}
 
-	trimmed := strings.TrimSuffix(azure.Prefix, azureDelimiter)
-	if trimmed == "" {
-		return azure.Container
-	}
-
-	parts := strings.Split(trimmed, azureDelimiter)
-	return parts[len(parts)-1]
+	return parentHighlightName(azure.Prefix, azure.Container, azureDelimiter)
 }
 
 func (b AzureBlobBackend) LoadTimeout() time.Duration {
@@ -99,10 +93,7 @@ func (b AzureBlobBackend) Enter(_ context.Context, state Location, highlighted E
 			return state, false, nil
 		}
 
-		nextPrefix := highlighted.FullPath
-		if nextPrefix != "" && !strings.HasSuffix(nextPrefix, azureDelimiter) {
-			nextPrefix += azureDelimiter
-		}
+		nextPrefix := enterPrefix(highlighted.FullPath, azureDelimiter)
 		return AzureLocation{Mode: AzureModeObjects, Container: azure.Container, Prefix: nextPrefix}, true, nil
 	default:
 		return state, false, nil
@@ -123,18 +114,8 @@ func (b AzureBlobBackend) Parent(state Location) (Location, bool) {
 		return AzureLocation{Mode: AzureModeContainers}, true
 	}
 
-	trimmed := strings.TrimSuffix(azure.Prefix, azureDelimiter)
-	if trimmed == "" {
-		return AzureLocation{Mode: AzureModeObjects, Container: azure.Container, Prefix: ""}, true
-	}
-
-	lastSlash := strings.LastIndex(trimmed, azureDelimiter)
-	if lastSlash < 0 {
-		return AzureLocation{Mode: AzureModeObjects, Container: azure.Container, Prefix: ""}, true
-	}
-
-	parentPrefix := trimmed[:lastSlash+1]
-	return AzureLocation{Mode: AzureModeObjects, Container: azure.Container, Prefix: parentPrefix}, true
+	parent := parentPrefix(azure.Prefix, azureDelimiter)
+	return AzureLocation{Mode: AzureModeObjects, Container: azure.Container, Prefix: parent}, true
 }
 
 func (b AzureBlobBackend) listContainers(ctx context.Context, showHidden bool) ([]Entry, error) {
@@ -265,24 +246,6 @@ func (b AzureBlobBackend) listObjects(ctx context.Context, containerName string,
 	return entries, nil
 }
 
-func trimPrefix(value, prefix string) string {
-	if prefix == "" {
-		return value
-	}
-
-	if strings.HasPrefix(value, prefix) {
-		return value[len(prefix):]
-	}
-
-	return value
-}
-
 func isHiddenBySegment(path string) bool {
-	for _, segment := range strings.Split(path, azureDelimiter) {
-		if strings.HasPrefix(segment, ".") {
-			return true
-		}
-	}
-
-	return false
+	return hiddenBySegment(path, azureDelimiter)
 }

@@ -50,6 +50,24 @@ func newPane(backend PaneBackend, theme appTheme, showHidden bool) Pane {
 	return pane
 }
 
+func (p *Pane) reset(backend PaneBackend, theme appTheme) {
+	location := backend.InitialLocation()
+
+	p.backend = backend
+	p.location = location
+	p.path = backend.DisplayPath(location)
+	p.selected = map[string]bool{}
+	p.entries = []Entry{}
+	p.searchQuery = ""
+	p.searchRegex = nil
+	p.matchIndexes = nil
+	p.isLoading = false
+	p.loadErr = nil
+	p.loadSeq = 0
+	p.pendingHighlightName = ""
+	p.table = createTable([]table.Row{}, theme, p.selected)
+}
+
 func (p *Pane) highlightedName() string {
 	entry, ok := p.highlightedEntry()
 	if !ok {

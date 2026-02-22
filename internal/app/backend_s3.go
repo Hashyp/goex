@@ -38,13 +38,7 @@ func (b S3Backend) ParentHighlightName(state Location) string {
 		return ""
 	}
 
-	trimmed := strings.TrimSuffix(s3Location.Prefix, s3Delimiter)
-	if trimmed == "" {
-		return s3Location.Bucket
-	}
-
-	parts := strings.Split(trimmed, s3Delimiter)
-	return parts[len(parts)-1]
+	return parentHighlightName(s3Location.Prefix, s3Location.Bucket, s3Delimiter)
 }
 
 func (b S3Backend) DisplayPath(state Location) string {
@@ -103,10 +97,7 @@ func (b S3Backend) Enter(_ context.Context, state Location, highlighted Entry) (
 			return state, false, nil
 		}
 
-		nextPrefix := highlighted.FullPath
-		if nextPrefix != "" && !strings.HasSuffix(nextPrefix, s3Delimiter) {
-			nextPrefix += s3Delimiter
-		}
+		nextPrefix := enterPrefix(highlighted.FullPath, s3Delimiter)
 		return S3Location{Mode: S3ModeObjects, Bucket: s3Location.Bucket, Prefix: nextPrefix}, true, nil
 	default:
 		return state, false, nil
@@ -126,18 +117,8 @@ func (b S3Backend) Parent(state Location) (Location, bool) {
 		return S3Location{Mode: S3ModeBuckets}, true
 	}
 
-	trimmed := strings.TrimSuffix(s3Location.Prefix, s3Delimiter)
-	if trimmed == "" {
-		return S3Location{Mode: S3ModeObjects, Bucket: s3Location.Bucket, Prefix: ""}, true
-	}
-
-	lastSlash := strings.LastIndex(trimmed, s3Delimiter)
-	if lastSlash < 0 {
-		return S3Location{Mode: S3ModeObjects, Bucket: s3Location.Bucket, Prefix: ""}, true
-	}
-
-	parentPrefix := trimmed[:lastSlash+1]
-	return S3Location{Mode: S3ModeObjects, Bucket: s3Location.Bucket, Prefix: parentPrefix}, true
+	parent := parentPrefix(s3Location.Prefix, s3Delimiter)
+	return S3Location{Mode: S3ModeObjects, Bucket: s3Location.Bucket, Prefix: parent}, true
 }
 
 func (b S3Backend) listBuckets(ctx context.Context, showHidden bool) ([]Entry, error) {
@@ -262,13 +243,7 @@ func (b S3Backend) listObjects(ctx context.Context, bucketName string, prefix st
 }
 
 func isHiddenByS3Segment(path string) bool {
-	for _, segment := range strings.Split(path, s3Delimiter) {
-		if strings.HasPrefix(segment, ".") {
-			return true
-		}
-	}
-
-	return false
+	return hiddenBySegment(path, s3Delimiter)
 }
 
 func strPtr(value string) *string {
