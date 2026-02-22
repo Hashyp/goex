@@ -116,6 +116,25 @@ func (p *Pane) enterHighlighted(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+func (p *Pane) deleteHighlighted(ctx context.Context) (bool, error) {
+	highlighted, ok := p.highlightedEntry()
+	if !ok {
+		return false, nil
+	}
+	return p.deleteEntry(ctx, highlighted)
+}
+
+func (p *Pane) deleteEntry(ctx context.Context, entry Entry) (bool, error) {
+	if entry.Kind != KindObject {
+		return false, nil
+	}
+	if err := p.backend.Delete(ctx, p.location, entry); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func (p *Pane) goParent() bool {
 	childName := p.backend.ParentHighlightName(p.location)
 

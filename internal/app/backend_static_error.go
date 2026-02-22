@@ -43,6 +43,14 @@ func (b StaticErrorBackend) Enter(_ context.Context, state Location, _ Entry) (L
 	return state, false, nil
 }
 
+func (b StaticErrorBackend) Delete(_ context.Context, _ Location, _ Entry) error {
+	if b.err == nil {
+		return fmt.Errorf("backend unavailable")
+	}
+
+	return b.err
+}
+
 func (b StaticErrorBackend) Parent(state Location) (Location, bool) {
 	return state, false
 }

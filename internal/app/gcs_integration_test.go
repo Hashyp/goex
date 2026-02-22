@@ -91,6 +91,17 @@ func TestGCSBackendListsBucketsAndVirtualFolders(t *testing.T) {
 	if !contains(entryNames(rootEntriesWithHidden), ".hidden-root.txt") {
 		t.Fatalf("expected hidden root object when showHidden=true")
 	}
+
+	if err := backend.Delete(ctx, rootLocation, Entry{Name: "root.txt", FullPath: "root.txt", Kind: KindObject}); err != nil {
+		t.Fatalf("delete root object: %v", err)
+	}
+	rootEntriesAfterDelete, err := backend.List(ctx, rootLocation, true)
+	if err != nil {
+		t.Fatalf("list root after delete: %v", err)
+	}
+	if contains(entryNames(rootEntriesAfterDelete), "root.txt") {
+		t.Fatalf("expected root.txt to be deleted, entries=%v", entryNames(rootEntriesAfterDelete))
+	}
 }
 
 func putGCSObject(t *testing.T, ctx context.Context, client *storage.Client, bucket, key, content string) {

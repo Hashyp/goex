@@ -113,6 +113,20 @@ func (b LocalBackend) Enter(_ context.Context, state Location, highlighted Entry
 	return LocalLocation{Path: target}, true, nil
 }
 
+func (b LocalBackend) Delete(_ context.Context, state Location, highlighted Entry) error {
+	if highlighted.Kind != KindObject {
+		return nil
+	}
+
+	local, ok := state.(LocalLocation)
+	if !ok {
+		return ErrInvalidLocation
+	}
+
+	target := filepath.Join(local.Path, highlighted.Name)
+	return b.fs.Remove(target)
+}
+
 func (b LocalBackend) Parent(state Location) (Location, bool) {
 	local, ok := state.(LocalLocation)
 	if !ok {

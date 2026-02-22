@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/evertras/bubble-table/table"
 )
+
+type failingRemoveFS struct {
+	OSFileSystem
+}
+
+func (failingRemoveFS) Remove(string) error {
+	return errors.New("delete failed")
+}
 
 func runCmd(t *testing.T, model Model, cmd tea.Cmd) Model {
 	t.Helper()
@@ -554,6 +563,88 @@ func TestBackToParentHighlightsVisitedDirectory(t *testing.T) {
 	}
 	if got := model.leftPane.highlightedName(); got != "alpha" {
 		t.Fatalf("expected highlight restored to alpha, got %q", got)
+	}
+}
+
+func TestDeleteModalCancelsOnEsc(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "alpha.txt")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !model.deleteModalVisible {
+		t.Fatal("expected delete modal to open")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to close on escape")
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected file to remain after cancel: %v", err)
+	}
+}
+
+func TestDeleteConfirmRemovesFileAndReloadsPane(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "alpha.txt")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to close after confirmation")
+	}
+	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected file to be deleted, stat err=%v", err)
+	}
+	if got := len(model.leftPane.table.GetVisibleRows()); got != 0 {
+		t.Fatalf("expected pane to reload without deleted row, got %d rows", got)
+	}
+}
+
+func TestDeleteDoesNotOpenModalForDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "alpha"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to remain closed for directory")
+	}
+	if model.status != "Delete: only files/objects are supported" {
+		t.Fatalf("unexpected status: %q", model.status)
+	}
+}
+
+func TestDeleteErrorIsShownInStatus(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "alpha.txt")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	model := initModel(t, NewModelWithFS(failingRemoveFS{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if model.deleteModalVisible {
+		t.Fatal("expected delete modal to close on error")
+	}
+	if model.status != "delete failed" {
+		t.Fatalf("unexpected status: %q", model.status)
+	}
+	if got := len(model.leftPane.table.GetVisibleRows()); got != 1 {
+		t.Fatalf("expected rows to remain after delete error, got %d", got)
 	}
 }
 
