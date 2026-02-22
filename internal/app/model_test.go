@@ -356,6 +356,73 @@ func TestPanePickerAllowsSameBackendOnBothPanes(t *testing.T) {
 	}
 }
 
+func TestPanePickerCanSwitchRightPaneToGCS(t *testing.T) {
+	root := t.TempDir()
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	if !model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to open")
+	}
+
+	// file system -> azure -> s3 -> gcs
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.pickerModalVisible {
+		t.Fatal("expected pane picker modal to close after apply")
+	}
+	if got := model.rightPane.path; got != "gcs:///" {
+		t.Fatalf("expected right pane gcs path, got %q", got)
+	}
+	loc, ok := model.rightPane.location.(GCSLocation)
+	if !ok {
+		t.Fatalf("expected right pane location to be GCS, got %T", model.rightPane.location)
+	}
+	if loc.Mode != GCSModeBuckets {
+		t.Fatalf("expected right pane in buckets mode, got %+v", loc)
+	}
+}
+
+func TestSearchWorksForGCSBackedPane(t *testing.T) {
+	left := &fakeBackend{
+		location: LocalLocation{Path: "/left"},
+		entries:  []Entry{{ID: "left:one", Name: "left.txt", Kind: KindObject}},
+	}
+	right := &fakeBackend{
+		location: GCSLocation{Mode: GCSModeBuckets},
+		entries: []Entry{
+			{ID: "gcs-bucket:alpha", Name: "alpha-bucket", Kind: KindGCSBucket},
+			{ID: "gcs-bucket:beta", Name: "beta-bucket", Kind: KindGCSBucket},
+		},
+	}
+
+	model := NewModelWithBackends(left, right)
+	model = runCmd(t, model, model.leftPane.beginLoad(paneLeft))
+	model = runCmd(t, model, model.rightPane.beginLoad(paneRight))
+
+	model.setActivePane(paneRight)
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.rightPane.searchRegex == nil {
+		t.Fatal("expected search regex to be active on GCS pane")
+	}
+	if len(model.rightPane.matchIndexes) != 1 {
+		t.Fatalf("expected one search match on GCS pane, got %d", len(model.rightPane.matchIndexes))
+	}
+	if got := model.rightPane.highlightedName(); got != "beta-bucket" {
+		t.Fatalf("expected highlighted GCS match to be beta-bucket, got %q", got)
+	}
+}
+
 func TestSearchDoesNotReorderRows(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"zzz.txt", "alpha.txt", "middle.txt", "beta.txt"} {

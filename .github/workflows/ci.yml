@@ -43,6 +43,13 @@ jobs:
             -e MINIO_ROOT_PASSWORD=minioadmin \
             minio/minio server /data --console-address :9001
 
+      - name: Start fake-gcs-server
+        run: |
+          docker run -d --name fake-gcs-server \
+            -p 4443:4443 \
+            fsouza/fake-gcs-server:1.52.3 \
+            -scheme http -host 0.0.0.0 -port 4443
+
       - name: Wait For Azurite
         run: |
           for i in {1..30}; do
@@ -62,8 +69,20 @@ jobs:
           docker logs minio || true
           exit 1
 
+      - name: Wait For fake-gcs-server
+        run: |
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4443/storage/v1/b >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "fake-gcs-server did not start in time"
+          docker logs fake-gcs-server || true
+          exit 1
+
       - name: Test
         env:
           GOEX_RUN_AZURITE_TESTS: "1"
           GOEX_RUN_MINIO_TESTS: "1"
+          GOEX_RUN_GCS_TESTS: "1"
+          STORAGE_EMULATOR_HOST: "http://127.0.0.1:4443"
         run: go test ./...

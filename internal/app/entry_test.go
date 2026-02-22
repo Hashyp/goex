@@ -121,3 +121,10 @@ func TestTypeOrSizeBucketMarker(t *testing.T) {
 		t.Fatalf("expected bucket marker <BKT>, got %q", got)
 	}
 }
+
+func TestTypeOrSizeGCSBucketMarker(t *testing.T) {
+	entry := Entry{Kind: KindGCSBucket}
+	if got := entry.TypeOrSize(); got != "<BKT>" {
+		t.Fatalf("expected GCS bucket marker <BKT>, got %q", got)
+	}
+}
