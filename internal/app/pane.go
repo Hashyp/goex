@@ -152,8 +152,32 @@ func (p *Pane) selectedDeleteEntries() []Entry {
 	return dedupeDeleteTargets(entries)
 }
 
+func (p *Pane) selectedCopyEntries() []Entry {
+	entries := make([]Entry, 0, len(p.entries))
+	for _, entry := range p.entries {
+		if !p.selected[entry.ID] {
+			continue
+		}
+		if !isCopyTargetKind(entry.Kind) {
+			continue
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return dedupeDeleteTargets(entries)
+}
+
 func isDeleteTargetKind(kind EntryKind) bool {
 	return kind == KindObject || kind == KindDirectory
+}
+
+func isCopyTargetKind(kind EntryKind) bool {
+	return kind == KindObject ||
+		kind == KindDirectory ||
+		kind == KindBucket ||
+		kind == KindGCSBucket ||
+		kind == KindContainer
 }
 
 func dedupeDeleteTargets(entries []Entry) []Entry {

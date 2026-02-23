@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -143,6 +146,112 @@ func (b LocalBackend) Parent(state Location) (Location, bool) {
 	}
 
 	return LocalLocation{Path: parent}, true
+}
+
+func (b LocalBackend) EnumerateCopy(_ context.Context, state Location, selected []Entry, destination Location) ([]TransferPlanItem, error) {
+	local, ok := state.(LocalLocation)
+	if !ok {
+		return nil, ErrInvalidLocation
+	}
+
+	plan := make([]TransferPlanItem, 0, len(selected))
+	for _, entry := range selected {
+		switch entry.Kind {
+		case KindObject:
+			sourcePath := entry.FullPath
+			if sourcePath == "" {
+				sourcePath = filepath.Join(local.Path, entry.Name)
+			}
+
+			srcRef, err := sourceRefForLocation(local, sourcePath)
+			if err != nil {
+				return nil, err
+			}
+			dstRef, err := resolveDestinationRef(destination, entry.Name)
+			if err != nil {
+				return nil, err
+			}
+			plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+		case KindDirectory:
+			dirPath := entry.FullPath
+			if dirPath == "" {
+				dirPath = filepath.Join(local.Path, entry.Name)
+			}
+
+			if err := filepath.WalkDir(dirPath, func(filePath string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if d.IsDir() {
+					return nil
+				}
+
+				relativeToDir, err := filepath.Rel(dirPath, filePath)
+				if err != nil {
+					return err
+				}
+				relative := filepath.ToSlash(filepath.Join(entry.Name, relativeToDir))
+
+				srcRef, err := sourceRefForLocation(local, filePath)
+				if err != nil {
+					return err
+				}
+				dstRef, err := resolveDestinationRef(destination, relative)
+				if err != nil {
+					return err
+				}
+
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+				return nil
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return plan, nil
+}
+
+func (b LocalBackend) OpenCopyReader(_ context.Context, source TransferObjectRef) (CopyReadHandle, error) {
+	file, err := os.Open(source.Path)
+	if err != nil {
+		return CopyReadHandle{}, err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return CopyReadHandle{}, err
+	}
+
+	return CopyReadHandle{
+		Reader: file,
+		Metadata: TransferObjectMetadata{
+			SizeBytes:  stat.Size(),
+			ModTime:    stat.ModTime(),
+			HasModTime: true,
+		},
+	}, nil
+}
+
+func (b LocalBackend) CopyDestinationExists(_ context.Context, destination TransferObjectRef) (bool, error) {
+	_, err := os.Stat(destination.Path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func (b LocalBackend) OpenCopyWriter(_ context.Context, destination TransferObjectRef, _ TransferObjectMetadata) (io.WriteCloser, error) {
+	if err := os.MkdirAll(filepath.Dir(destination.Path), 0o755); err != nil {
+		return nil, err
+	}
+
+	return os.Create(destination.Path)
 }
 
 var ErrInvalidLocation = errors.New("invalid location type for backend")

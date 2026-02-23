@@ -32,6 +32,9 @@ func (m Model) View() string {
 		modal = m.searchModalView()
 		// Keep tables visible while modal is open.
 		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
+	} else if m.copyModal.visible {
+		modal = m.copyModalView()
+		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
 	} else if m.deleteModal.visible {
 		modal = m.deleteModalView()
 		paneHeight = max(1, paneHeight-lipgloss.Height(modal)-1)
@@ -45,11 +48,109 @@ func (m Model) View() string {
 
 	tables := lipgloss.JoinHorizontal(lipgloss.Top, leftPaneView, rightPaneView)
 	background := lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, tables)
-	if !m.searchModalVisible && !m.pickerModalVisible && !m.deleteModal.visible {
+	if !m.searchModalVisible && !m.pickerModalVisible && !m.copyModal.visible && !m.deleteModal.visible {
 		return background
 	}
 
 	return overlayCentered(background, modal, m.width, m.height)
+}
+
+func (m Model) copyModalView() string {
+	if m.copyModal.progress.inProgress {
+		title := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.header).
+			Render("Copying")
+
+		frame := deleteSpinnerFrames[m.copyModal.progress.frame%len(deleteSpinnerFrames)]
+		progress := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render(fmt.Sprintf("%s Processing %d/%d item(s)", frame, m.copyModal.progress.done+1, max(1, m.copyModal.progress.total)))
+
+		current := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render(fmt.Sprintf("Current: %q", m.copyModal.progress.current))
+
+		hint := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render("Copy operation is in progress...")
+
+		return lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.border).
+			Padding(1, 2).
+			Width(84).
+			Render(lipgloss.JoinVertical(lipgloss.Left, title, progress, current, hint))
+	}
+
+	if m.copyModal.hasResult || m.copyModal.planningErr != nil {
+		title := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.header).
+			Render("Copy Result")
+
+		var summary string
+		if m.copyModal.planningErr != nil {
+			summary = fmt.Sprintf("Failed to start copy: %v", m.copyModal.planningErr)
+		} else {
+			summary = fmt.Sprintf(
+				"Planned: %d  Copied: %d  Skipped: %d  Failed: %d",
+				m.copyModal.planned,
+				len(m.copyModal.result.Copied),
+				len(m.copyModal.result.Skipped),
+				len(m.copyModal.result.Failed),
+			)
+		}
+		summaryView := lipgloss.NewStyle().Foreground(m.theme.text).Render(summary)
+
+		hint := lipgloss.NewStyle().
+			Foreground(m.theme.text).
+			Render("enter/esc: close")
+
+		lines := []string{title, summaryView}
+		if len(m.copyModal.result.Failed) > 0 {
+			first := m.copyModal.result.Failed[0]
+			lines = append(lines, lipgloss.NewStyle().Foreground(m.theme.text).Render(
+				fmt.Sprintf("First error (%s): %v", first.Stage, first.Err),
+			))
+		}
+		lines = append(lines, hint)
+
+		return lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.border).
+			Padding(1, 2).
+			Width(72).
+			Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	}
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.header).
+		Render("Confirm Copy")
+
+	targetPath := m.leftPane.path
+	if m.copyModal.destinationPane == paneRight {
+		targetPath = m.rightPane.path
+	}
+	question := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render(fmt.Sprintf("Copy %d item(s) to %s?", len(m.copyModal.entries), targetPath))
+
+	policy := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render("Conflict policy: skip existing")
+
+	hint := lipgloss.NewStyle().
+		Foreground(m.theme.text).
+		Render("y: start  n/esc: cancel")
+
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.border).
+		Padding(1, 2).
+		Width(72).
+		Render(lipgloss.JoinVertical(lipgloss.Left, title, question, policy, hint))
 }
 
 func (m Model) deleteModalView() string {

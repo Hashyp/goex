@@ -2,13 +2,18 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 const s3Delimiter = "/"
@@ -356,4 +361,214 @@ func (b S3Backend) listKeysByPrefix(ctx context.Context, bucketName string, pref
 	}
 
 	return keys, nil
+}
+
+func (b S3Backend) EnumerateCopy(ctx context.Context, state Location, selected []Entry, destination Location) ([]TransferPlanItem, error) {
+	s3Location, ok := state.(S3Location)
+	if !ok {
+		return nil, ErrInvalidLocation
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("s3 client not configured")
+	}
+
+	plan := make([]TransferPlanItem, 0, len(selected))
+	for _, entry := range selected {
+		switch s3Location.Mode {
+		case S3ModeBuckets:
+			if entry.Kind != KindBucket || entry.Name == "" {
+				continue
+			}
+			keys, err := b.listKeysByPrefix(ctx, entry.Name, "")
+			if err != nil {
+				return nil, err
+			}
+			for _, key := range keys {
+				srcRef := TransferObjectRef{
+					Provider: "s3",
+					Scope:    entry.Name,
+					Path:     key,
+					Display:  "s3:///" + entry.Name + "/" + key,
+				}
+				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, key))
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			}
+		case S3ModeObjects:
+			if s3Location.Bucket == "" {
+				return nil, fmt.Errorf("s3 bucket not selected")
+			}
+			switch entry.Kind {
+			case KindObject:
+				key := entry.FullPath
+				if key == "" {
+					key = joinObjectPath(s3Location.Prefix, entry.Name)
+				}
+
+				srcRef, err := sourceRefForLocation(s3Location, key)
+				if err != nil {
+					return nil, err
+				}
+				dstRef, err := resolveDestinationRef(destination, entry.Name)
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			case KindDirectory:
+				prefix := enterPrefix(entry.FullPath, s3Delimiter)
+				keys, err := b.listKeysByPrefix(ctx, s3Location.Bucket, prefix)
+				if err != nil {
+					return nil, err
+				}
+				for _, key := range keys {
+					rel := path.Join(entry.Name, trimPrefix(key, prefix))
+					srcRef, err := sourceRefForLocation(s3Location, key)
+					if err != nil {
+						return nil, err
+					}
+					dstRef, err := resolveDestinationRef(destination, rel)
+					if err != nil {
+						return nil, err
+					}
+					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unknown s3 mode: %s", s3Location.Mode)
+		}
+	}
+
+	return plan, nil
+}
+
+func (b S3Backend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {
+	if b.client == nil {
+		return CopyReadHandle{}, fmt.Errorf("s3 client not configured")
+	}
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(source.Scope),
+		Key:    aws.String(source.Path),
+	})
+	if err != nil {
+		return CopyReadHandle{}, err
+	}
+
+	handle := CopyReadHandle{Reader: out.Body}
+	if out.ContentLength != nil {
+		handle.Metadata.SizeBytes = *out.ContentLength
+	}
+	if out.LastModified != nil {
+		handle.Metadata.ModTime = *out.LastModified
+		handle.Metadata.HasModTime = true
+	}
+	return handle, nil
+}
+
+func (b S3Backend) CopyDestinationExists(ctx context.Context, destination TransferObjectRef) (bool, error) {
+	if b.client == nil {
+		return false, fmt.Errorf("s3 client not configured")
+	}
+	_, err := b.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(destination.Scope),
+		Key:    aws.String(destination.Path),
+	})
+	if err == nil {
+		return true, nil
+	}
+
+	var notFound *types.NotFound
+	if errors.As(err, &notFound) {
+		return false, nil
+	}
+	var respErr *smithyhttp.ResponseError
+	if errors.As(err, &respErr) && respErr.HTTPStatusCode() == 404 {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func (b S3Backend) OpenCopyWriter(ctx context.Context, destination TransferObjectRef, _ TransferObjectMetadata) (io.WriteCloser, error) {
+	if b.client == nil {
+		return nil, fmt.Errorf("s3 client not configured")
+	}
+
+	tmpFile, err := os.CreateTemp("", "goex-copy-s3-*")
+	if err != nil {
+		return nil, err
+	}
+
+	return &s3BufferedUploadWriteCloser{
+		ctx:      ctx,
+		client:   b.client,
+		bucket:   destination.Scope,
+		key:      destination.Path,
+		file:     tmpFile,
+		tempPath: tmpFile.Name(),
+	}, nil
+}
+
+type pipeUploadWriteCloser struct {
+	pipe *io.PipeWriter
+	done <-chan error
+}
+
+func (w *pipeUploadWriteCloser) Write(p []byte) (int, error) {
+	return w.pipe.Write(p)
+}
+
+func (w *pipeUploadWriteCloser) Close() error {
+	if err := w.pipe.Close(); err != nil {
+		return err
+	}
+
+	return <-w.done
+}
+
+type s3BufferedUploadWriteCloser struct {
+	ctx      context.Context
+	client   *s3.Client
+	bucket   string
+	key      string
+	file     *os.File
+	tempPath string
+	closed   bool
+}
+
+func (w *s3BufferedUploadWriteCloser) Write(p []byte) (int, error) {
+	return w.file.Write(p)
+}
+
+func (w *s3BufferedUploadWriteCloser) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+	defer func() {
+		_ = os.Remove(w.tempPath)
+	}()
+
+	info, err := w.file.Stat()
+	if err != nil {
+		_ = w.file.Close()
+		return err
+	}
+	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+		_ = w.file.Close()
+		return err
+	}
+
+	_, uploadErr := w.client.PutObject(w.ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(w.bucket),
+		Key:           aws.String(w.key),
+		Body:          w.file,
+		ContentLength: aws.Int64(info.Size()),
+	})
+	closeErr := w.file.Close()
+	if uploadErr != nil {
+		return uploadErr
+	}
+	return closeErr
 }

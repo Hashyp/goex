@@ -31,10 +31,12 @@ func DefaultConfig() Config {
 }
 
 func NewClient(ctx context.Context, cfg Config) (*storage.Client, error) {
-	options := []option.ClientOption{option.WithoutAuthentication()}
+	options := []option.ClientOption{
+		option.WithoutAuthentication(),
+		storage.WithJSONReads(),
+	}
 	if cfg.Endpoint != "" {
-		endpoint := strings.TrimRight(cfg.Endpoint, "/") + "/storage/v1/"
-		options = append(options, option.WithEndpoint(endpoint))
+		_ = os.Setenv("STORAGE_EMULATOR_HOST", strings.TrimRight(cfg.Endpoint, "/"))
 	}
 
 	return storage.NewClient(ctx, options...)

@@ -717,6 +717,67 @@ func TestDeleteConfirmRemovesSelectedFiles(t *testing.T) {
 	}
 }
 
+func TestCopyModalCancelsOnEsc(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "alpha.txt"), []byte("alpha"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	dst := t.TempDir()
+
+	model := initModel(t, NewModelWithBackends(
+		NewLocalBackend(OSFileSystem{}, src),
+		NewLocalBackend(OSFileSystem{}, dst),
+	))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if !model.copyModal.visible {
+		t.Fatal("expected copy modal to open")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.copyModal.visible {
+		t.Fatal("expected copy modal to close on escape")
+	}
+}
+
+func TestCopyConfirmCopiesHighlightedFileToOppositePane(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "alpha.txt"), []byte("alpha"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	dst := t.TempDir()
+
+	model := initModel(t, NewModelWithBackends(
+		NewLocalBackend(OSFileSystem{}, src),
+		NewLocalBackend(OSFileSystem{}, dst),
+	))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if !model.copyModal.visible {
+		t.Fatal("expected copy result modal to remain visible")
+	}
+	if !model.copyModal.hasResult {
+		t.Fatal("expected copy result state after confirmation")
+	}
+	if len(model.copyModal.result.Copied) != 1 {
+		t.Fatalf("expected one copied item, got %d", len(model.copyModal.result.Copied))
+	}
+
+	copiedPath := filepath.Join(dst, "alpha.txt")
+	got, err := os.ReadFile(copiedPath)
+	if err != nil {
+		t.Fatalf("read copied file: %v", err)
+	}
+	if string(got) != "alpha" {
+		t.Fatalf("unexpected copied file contents: %q", string(got))
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.copyModal.visible {
+		t.Fatal("expected copy modal to close after result acknowledgment")
+	}
+}
+
 func visibleNames(rows []table.Row) []string {
 	names := make([]string, 0, len(rows))
 	for _, row := range rows {

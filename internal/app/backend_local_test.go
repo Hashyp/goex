@@ -66,3 +66,33 @@ func TestLocalDeleteReturnsInvalidLocation(t *testing.T) {
 		t.Fatalf("expected ErrInvalidLocation, got %v", err)
 	}
 }
+
+func TestLocalEnumerateCopyRecursiveDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "docs")
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("write a.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "b.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatalf("write b.txt: %v", err)
+	}
+
+	backend := NewLocalBackend(OSFileSystem{}, root)
+	entries := []Entry{
+		{
+			Name:     "docs",
+			FullPath: dir,
+			Kind:     KindDirectory,
+		},
+	}
+	plan, err := backend.EnumerateCopy(context.Background(), LocalLocation{Path: root}, entries, LocalLocation{Path: filepath.Join(root, "dst")})
+	if err != nil {
+		t.Fatalf("enumerate copy: %v", err)
+	}
+	if len(plan) != 2 {
+		t.Fatalf("expected 2 files in plan, got %d", len(plan))
+	}
+}

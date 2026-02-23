@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"path"
 	"strings"
 	"time"
 
@@ -310,4 +312,123 @@ func (b GCSBackend) listObjectNamesByPrefix(ctx context.Context, bucketName stri
 	}
 
 	return objectNames, nil
+}
+
+func (b GCSBackend) EnumerateCopy(ctx context.Context, state Location, selected []Entry, destination Location) ([]TransferPlanItem, error) {
+	gcsLocation, ok := state.(GCSLocation)
+	if !ok {
+		return nil, ErrInvalidLocation
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("gcs client not configured")
+	}
+
+	plan := make([]TransferPlanItem, 0, len(selected))
+	for _, entry := range selected {
+		switch gcsLocation.Mode {
+		case GCSModeBuckets:
+			if entry.Kind != KindGCSBucket || entry.Name == "" {
+				continue
+			}
+			objectNames, err := b.listObjectNamesByPrefix(ctx, entry.Name, "")
+			if err != nil {
+				return nil, err
+			}
+			for _, objectName := range objectNames {
+				srcRef := TransferObjectRef{
+					Provider: "gcs",
+					Scope:    entry.Name,
+					Path:     objectName,
+					Display:  "gcs:///" + entry.Name + "/" + objectName,
+				}
+				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, objectName))
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			}
+		case GCSModeObjects:
+			if gcsLocation.Bucket == "" {
+				return nil, fmt.Errorf("gcs bucket not selected")
+			}
+			switch entry.Kind {
+			case KindObject:
+				objectKey := entry.FullPath
+				if objectKey == "" {
+					objectKey = joinObjectPath(gcsLocation.Prefix, entry.Name)
+				}
+				srcRef, err := sourceRefForLocation(gcsLocation, objectKey)
+				if err != nil {
+					return nil, err
+				}
+				dstRef, err := resolveDestinationRef(destination, entry.Name)
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			case KindDirectory:
+				prefix := enterPrefix(entry.FullPath, gcsDelimiter)
+				objectNames, err := b.listObjectNamesByPrefix(ctx, gcsLocation.Bucket, prefix)
+				if err != nil {
+					return nil, err
+				}
+				for _, objectName := range objectNames {
+					rel := path.Join(entry.Name, trimPrefix(objectName, prefix))
+					srcRef, err := sourceRefForLocation(gcsLocation, objectName)
+					if err != nil {
+						return nil, err
+					}
+					dstRef, err := resolveDestinationRef(destination, rel)
+					if err != nil {
+						return nil, err
+					}
+					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unknown gcs mode: %s", gcsLocation.Mode)
+		}
+	}
+
+	return plan, nil
+}
+
+func (b GCSBackend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {
+	if b.client == nil {
+		return CopyReadHandle{}, fmt.Errorf("gcs client not configured")
+	}
+	reader, err := b.client.Bucket(source.Scope).Object(source.Path).NewReader(ctx)
+	if err != nil {
+		return CopyReadHandle{}, err
+	}
+
+	handle := CopyReadHandle{Reader: reader}
+	handle.Metadata.SizeBytes = reader.Attrs.Size
+	if !reader.Attrs.LastModified.IsZero() {
+		handle.Metadata.ModTime = reader.Attrs.LastModified
+		handle.Metadata.HasModTime = true
+	}
+	return handle, nil
+}
+
+func (b GCSBackend) CopyDestinationExists(ctx context.Context, destination TransferObjectRef) (bool, error) {
+	if b.client == nil {
+		return false, fmt.Errorf("gcs client not configured")
+	}
+	_, err := b.client.Bucket(destination.Scope).Object(destination.Path).Attrs(ctx)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func (b GCSBackend) OpenCopyWriter(ctx context.Context, destination TransferObjectRef, _ TransferObjectMetadata) (io.WriteCloser, error) {
+	if b.client == nil {
+		return nil, fmt.Errorf("gcs client not configured")
+	}
+	return b.client.Bucket(destination.Scope).Object(destination.Path).NewWriter(ctx), nil
 }
