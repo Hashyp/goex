@@ -40,6 +40,7 @@ type deleteStepMsg struct {
 }
 
 type deleteProgressTickMsg struct{}
+type copyProgressTickMsg struct{}
 
 type deleteFailure struct {
 	name string
@@ -64,6 +65,49 @@ type deleteModalState struct {
 	progress   deleteProgressState
 }
 
+type copyExecutionResultMsg struct {
+	sourcePane      activePane
+	destinationPane activePane
+	planned         int
+	result          TransferResult
+	planningErr     error
+}
+
+type copyPlanReadyMsg struct {
+	sourcePane      activePane
+	destinationPane activePane
+	plan            []TransferPlanItem
+	err             error
+}
+
+type copyStepResultMsg struct {
+	item   TransferPlanItem
+	result TransferResult
+}
+
+type copyProgressState struct {
+	inProgress bool
+	done       int
+	total      int
+	current    string
+	frame      int
+	deadline   time.Time
+}
+
+type copyModalState struct {
+	visible         bool
+	sourcePane      activePane
+	destinationPane activePane
+	entries         []Entry
+	plan            []TransferPlanItem
+	planIndex       int
+	progress        copyProgressState
+	planned         int
+	result          TransferResult
+	planningErr     error
+	hasResult       bool
+}
+
 type initLoadMsg struct{}
 
 type Model struct {
@@ -79,6 +123,7 @@ type Model struct {
 	searchInput        textinput.Model
 	searchTargetPane   activePane
 	deleteModal        deleteModalState
+	copyModal          copyModalState
 	pickerModalVisible bool
 	pickerTargetPane   activePane
 	pickerChoiceIndex  int
@@ -130,6 +175,26 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 				ids:        nil,
 				deadline:   time.Time{},
 			},
+		},
+		copyModal: copyModalState{
+			visible:         false,
+			sourcePane:      paneLeft,
+			destinationPane: paneRight,
+			entries:         nil,
+			progress: copyProgressState{
+				inProgress: false,
+				done:       0,
+				total:      0,
+				current:    "",
+				frame:      0,
+				deadline:   time.Time{},
+			},
+			plan:        nil,
+			planIndex:   0,
+			planned:     0,
+			result:      TransferResult{},
+			planningErr: nil,
+			hasResult:   false,
 		},
 		pickerModalVisible: false,
 		pickerTargetPane:   paneLeft,
@@ -232,6 +297,87 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		cmds = append(cmds, pane.beginLoad(typed.pane))
+	case copyExecutionResultMsg:
+		if !m.copyModal.visible {
+			break
+		}
+		m.copyModal.progress.inProgress = false
+		m.copyModal.planned = typed.planned
+		m.copyModal.result = typed.result
+		m.copyModal.planningErr = typed.planningErr
+		m.copyModal.hasResult = true
+
+		if typed.planningErr != nil {
+			m.status = fmt.Sprintf("Copy failed: %v", typed.planningErr)
+			break
+		}
+
+		m.status = fmt.Sprintf(
+			"Copy complete: copied %d, skipped %d, failed %d",
+			len(typed.result.Copied),
+			len(typed.result.Skipped),
+			len(typed.result.Failed),
+		)
+		if len(typed.result.Copied) > 0 {
+			cmds = append(cmds, m.paneByID(typed.destinationPane).beginLoad(typed.destinationPane))
+		}
+	case copyPlanReadyMsg:
+		if !m.copyModal.visible || !m.copyModal.progress.inProgress {
+			break
+		}
+		if typed.err != nil {
+			m.copyModal.progress.inProgress = false
+			m.copyModal.planningErr = typed.err
+			m.copyModal.hasResult = true
+			m.status = fmt.Sprintf("Copy failed: %v", typed.err)
+			break
+		}
+
+		m.copyModal.plan = typed.plan
+		m.copyModal.planIndex = 0
+		m.copyModal.progress.total = len(typed.plan)
+		m.copyModal.planned = len(typed.plan)
+		m.copyModal.result = TransferResult{
+			Op:      TransferOpCopy,
+			Copied:  make([]TransferResultItem, 0, len(typed.plan)),
+			Skipped: make([]TransferPlanItem, 0),
+			Failed:  make([]TransferFailure, 0),
+		}
+		if len(typed.plan) == 0 {
+			m.copyModal.progress.inProgress = false
+			m.copyModal.hasResult = true
+			m.status = "Copy complete: copied 0, skipped 0, failed 0"
+			break
+		}
+
+		m.copyModal.progress.current = typed.plan[0].Source.Display
+		cmds = append(cmds, m.nextCopyStepCmd())
+	case copyStepResultMsg:
+		if !m.copyModal.visible || !m.copyModal.progress.inProgress {
+			break
+		}
+
+		m.copyModal.result = mergeTransferResults(m.copyModal.result, typed.result)
+		m.copyModal.progress.done++
+		m.copyModal.planIndex++
+
+		if m.copyModal.planIndex < len(m.copyModal.plan) {
+			m.copyModal.progress.current = m.copyModal.plan[m.copyModal.planIndex].Source.Display
+			cmds = append(cmds, m.nextCopyStepCmd())
+			break
+		}
+
+		m.copyModal.progress.inProgress = false
+		m.copyModal.hasResult = true
+		m.status = fmt.Sprintf(
+			"Copy complete: copied %d, skipped %d, failed %d",
+			len(m.copyModal.result.Copied),
+			len(m.copyModal.result.Skipped),
+			len(m.copyModal.result.Failed),
+		)
+		if len(m.copyModal.result.Copied) > 0 {
+			cmds = append(cmds, m.paneByID(m.copyModal.destinationPane).beginLoad(m.copyModal.destinationPane))
+		}
 	case deleteStepMsg:
 		if m.deleteModal.progress.inProgress {
 			if typed.err != nil {
@@ -258,6 +404,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.deleteModal.progress.inProgress {
 			m.deleteModal.progress.frame++
 			cmds = append(cmds, deleteProgressTickCmd())
+		}
+	case copyProgressTickMsg:
+		if m.copyModal.progress.inProgress {
+			m.copyModal.progress.frame++
+			cmds = append(cmds, copyProgressTickCmd())
 		}
 	case tea.KeyMsg:
 		handled, keyCmds := m.handleKey(typed)

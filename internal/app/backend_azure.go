@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"path"
 	"strings"
 	"time"
 
@@ -338,4 +340,135 @@ func (b AzureBlobBackend) listBlobNamesByPrefix(ctx context.Context, containerNa
 	}
 
 	return blobNames, nil
+}
+
+func (b AzureBlobBackend) EnumerateCopy(ctx context.Context, state Location, selected []Entry, destination Location) ([]TransferPlanItem, error) {
+	azure, ok := state.(AzureLocation)
+	if !ok {
+		return nil, ErrInvalidLocation
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("azure client not configured")
+	}
+
+	plan := make([]TransferPlanItem, 0, len(selected))
+	for _, entry := range selected {
+		switch azure.Mode {
+		case AzureModeContainers:
+			if entry.Kind != KindContainer || entry.Name == "" {
+				continue
+			}
+			blobNames, err := b.listBlobNamesByPrefix(ctx, entry.Name, "")
+			if err != nil {
+				return nil, err
+			}
+			for _, blobName := range blobNames {
+				srcRef := TransferObjectRef{
+					Provider: "azure",
+					Scope:    entry.Name,
+					Path:     blobName,
+					Display:  "azure:/" + entry.Name + "/" + blobName,
+				}
+				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, blobName))
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			}
+		case AzureModeObjects:
+			if azure.Container == "" {
+				return nil, fmt.Errorf("azure container not selected")
+			}
+			switch entry.Kind {
+			case KindObject:
+				blobName := entry.FullPath
+				if blobName == "" {
+					blobName = joinObjectPath(azure.Prefix, entry.Name)
+				}
+				srcRef, err := sourceRefForLocation(azure, blobName)
+				if err != nil {
+					return nil, err
+				}
+				dstRef, err := resolveDestinationRef(destination, entry.Name)
+				if err != nil {
+					return nil, err
+				}
+				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+			case KindDirectory:
+				prefix := enterPrefix(entry.FullPath, azureDelimiter)
+				blobNames, err := b.listBlobNamesByPrefix(ctx, azure.Container, prefix)
+				if err != nil {
+					return nil, err
+				}
+				for _, blobName := range blobNames {
+					rel := path.Join(entry.Name, trimPrefix(blobName, prefix))
+					srcRef, err := sourceRefForLocation(azure, blobName)
+					if err != nil {
+						return nil, err
+					}
+					dstRef, err := resolveDestinationRef(destination, rel)
+					if err != nil {
+						return nil, err
+					}
+					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unknown azure mode: %s", azure.Mode)
+		}
+	}
+
+	return plan, nil
+}
+
+func (b AzureBlobBackend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {
+	if b.client == nil {
+		return CopyReadHandle{}, fmt.Errorf("azure client not configured")
+	}
+	resp, err := b.client.DownloadStream(ctx, source.Scope, source.Path, nil)
+	if err != nil {
+		return CopyReadHandle{}, err
+	}
+
+	reader := resp.NewRetryReader(ctx, nil)
+	handle := CopyReadHandle{Reader: reader}
+	if resp.ContentLength != nil {
+		handle.Metadata.SizeBytes = *resp.ContentLength
+	}
+	if resp.LastModified != nil {
+		handle.Metadata.ModTime = *resp.LastModified
+		handle.Metadata.HasModTime = true
+	}
+	return handle, nil
+}
+
+func (b AzureBlobBackend) CopyDestinationExists(ctx context.Context, destination TransferObjectRef) (bool, error) {
+	if b.client == nil {
+		return false, fmt.Errorf("azure client not configured")
+	}
+	containerClient := b.client.ServiceClient().NewContainerClient(destination.Scope)
+	_, err := containerClient.NewBlobClient(destination.Path).GetProperties(ctx, nil)
+	if err == nil {
+		return true, nil
+	}
+	if isAzureNotFoundError(err) {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func (b AzureBlobBackend) OpenCopyWriter(ctx context.Context, destination TransferObjectRef, _ TransferObjectMetadata) (io.WriteCloser, error) {
+	if b.client == nil {
+		return nil, fmt.Errorf("azure client not configured")
+	}
+
+	reader, writer := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		_, err := b.client.UploadStream(ctx, destination.Scope, destination.Path, reader, nil)
+		done <- err
+	}()
+
+	return &pipeUploadWriteCloser{pipe: writer, done: done}, nil
 }
