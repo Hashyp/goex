@@ -65,14 +65,6 @@ type deleteModalState struct {
 	progress   deleteProgressState
 }
 
-type copyExecutionResultMsg struct {
-	sourcePane      activePane
-	destinationPane activePane
-	planned         int
-	result          TransferResult
-	planningErr     error
-}
-
 type copyPlanReadyMsg struct {
 	sourcePane      activePane
 	destinationPane activePane
@@ -297,30 +289,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		cmds = append(cmds, pane.beginLoad(typed.pane))
-	case copyExecutionResultMsg:
-		if !m.copyModal.visible {
-			break
-		}
-		m.copyModal.progress.inProgress = false
-		m.copyModal.planned = typed.planned
-		m.copyModal.result = typed.result
-		m.copyModal.planningErr = typed.planningErr
-		m.copyModal.hasResult = true
-
-		if typed.planningErr != nil {
-			m.status = fmt.Sprintf("Copy failed: %v", typed.planningErr)
-			break
-		}
-
-		m.status = fmt.Sprintf(
-			"Copy complete: copied %d, skipped %d, failed %d",
-			len(typed.result.Copied),
-			len(typed.result.Skipped),
-			len(typed.result.Failed),
-		)
-		if len(typed.result.Copied) > 0 {
-			cmds = append(cmds, m.paneByID(typed.destinationPane).beginLoad(typed.destinationPane))
-		}
 	case copyPlanReadyMsg:
 		if !m.copyModal.visible || !m.copyModal.progress.inProgress {
 			break
