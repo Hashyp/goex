@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 	"time"
 
@@ -351,74 +350,34 @@ func (b AzureBlobBackend) EnumerateCopy(ctx context.Context, state Location, sel
 		return nil, fmt.Errorf("azure client not configured")
 	}
 
-	plan := make([]TransferPlanItem, 0, len(selected))
-	for _, entry := range selected {
-		switch azure.Mode {
-		case AzureModeContainers:
-			if entry.Kind != KindContainer || entry.Name == "" {
-				continue
-			}
-			blobNames, err := b.listBlobNamesByPrefix(ctx, entry.Name, "")
-			if err != nil {
-				return nil, err
-			}
-			for _, blobName := range blobNames {
-				srcRef := TransferObjectRef{
-					Provider: "azure",
-					Scope:    entry.Name,
-					Path:     blobName,
-					Display:  "azure:/" + entry.Name + "/" + blobName,
-				}
-				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, blobName))
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			}
-		case AzureModeObjects:
-			if azure.Container == "" {
-				return nil, fmt.Errorf("azure container not selected")
-			}
-			switch entry.Kind {
-			case KindObject:
-				blobName := entry.FullPath
-				if blobName == "" {
-					blobName = joinObjectPath(azure.Prefix, entry.Name)
-				}
-				srcRef, err := sourceRefForLocation(azure, blobName)
-				if err != nil {
-					return nil, err
-				}
-				dstRef, err := resolveDestinationRef(destination, entry.Name)
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			case KindDirectory:
-				prefix := enterPrefix(entry.FullPath, azureDelimiter)
-				blobNames, err := b.listBlobNamesByPrefix(ctx, azure.Container, prefix)
-				if err != nil {
-					return nil, err
-				}
-				for _, blobName := range blobNames {
-					rel := path.Join(entry.Name, trimPrefix(blobName, prefix))
-					srcRef, err := sourceRefForLocation(azure, blobName)
-					if err != nil {
-						return nil, err
-					}
-					dstRef, err := resolveDestinationRef(destination, rel)
-					if err != nil {
-						return nil, err
-					}
-					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unknown azure mode: %s", azure.Mode)
-		}
+	buildSource := func(scope string, objectPath string) (TransferObjectRef, error) {
+		return newTransferObjectRef("azure", scope, objectPath)
 	}
-
-	return plan, nil
+	switch azure.Mode {
+	case AzureModeContainers:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeRoot,
+			rootKind:     KindContainer,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listBlobNamesByPrefix,
+			buildSource:  buildSource,
+		})
+	case AzureModeObjects:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeObjects,
+			scopeLabel:   "azure container",
+			scope:        azure.Container,
+			prefix:       azure.Prefix,
+			delimiter:    azureDelimiter,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listBlobNamesByPrefix,
+			buildSource:  buildSource,
+		})
+	default:
+		return nil, fmt.Errorf("unknown azure mode: %s", azure.Mode)
+	}
 }
 
 func (b AzureBlobBackend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {

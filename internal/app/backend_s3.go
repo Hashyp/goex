@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -372,75 +371,34 @@ func (b S3Backend) EnumerateCopy(ctx context.Context, state Location, selected [
 		return nil, fmt.Errorf("s3 client not configured")
 	}
 
-	plan := make([]TransferPlanItem, 0, len(selected))
-	for _, entry := range selected {
-		switch s3Location.Mode {
-		case S3ModeBuckets:
-			if entry.Kind != KindBucket || entry.Name == "" {
-				continue
-			}
-			keys, err := b.listKeysByPrefix(ctx, entry.Name, "")
-			if err != nil {
-				return nil, err
-			}
-			for _, key := range keys {
-				srcRef := TransferObjectRef{
-					Provider: "s3",
-					Scope:    entry.Name,
-					Path:     key,
-					Display:  "s3:///" + entry.Name + "/" + key,
-				}
-				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, key))
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			}
-		case S3ModeObjects:
-			if s3Location.Bucket == "" {
-				return nil, fmt.Errorf("s3 bucket not selected")
-			}
-			switch entry.Kind {
-			case KindObject:
-				key := entry.FullPath
-				if key == "" {
-					key = joinObjectPath(s3Location.Prefix, entry.Name)
-				}
-
-				srcRef, err := sourceRefForLocation(s3Location, key)
-				if err != nil {
-					return nil, err
-				}
-				dstRef, err := resolveDestinationRef(destination, entry.Name)
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			case KindDirectory:
-				prefix := enterPrefix(entry.FullPath, s3Delimiter)
-				keys, err := b.listKeysByPrefix(ctx, s3Location.Bucket, prefix)
-				if err != nil {
-					return nil, err
-				}
-				for _, key := range keys {
-					rel := path.Join(entry.Name, trimPrefix(key, prefix))
-					srcRef, err := sourceRefForLocation(s3Location, key)
-					if err != nil {
-						return nil, err
-					}
-					dstRef, err := resolveDestinationRef(destination, rel)
-					if err != nil {
-						return nil, err
-					}
-					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unknown s3 mode: %s", s3Location.Mode)
-		}
+	buildSource := func(scope string, objectPath string) (TransferObjectRef, error) {
+		return newTransferObjectRef("s3", scope, objectPath)
 	}
-
-	return plan, nil
+	switch s3Location.Mode {
+	case S3ModeBuckets:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeRoot,
+			rootKind:     KindBucket,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listKeysByPrefix,
+			buildSource:  buildSource,
+		})
+	case S3ModeObjects:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeObjects,
+			scopeLabel:   "s3 bucket",
+			scope:        s3Location.Bucket,
+			prefix:       s3Location.Prefix,
+			delimiter:    s3Delimiter,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listKeysByPrefix,
+			buildSource:  buildSource,
+		})
+	default:
+		return nil, fmt.Errorf("unknown s3 mode: %s", s3Location.Mode)
+	}
 }
 
 func (b S3Backend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {

@@ -11,6 +11,11 @@ Priority order (fixed):
 6. Rename file/folder/bucket/container
 7. Help window with shortcuts
 8. Persistent config
+9. Rename search to find next
+10. Filtering like in yazi with fd and grep but this will need to be adjusted for cloud storages
+11. Applying shell script when renaming!
+12. Batch operations may be BIG WIN overall for cloud specific operations:
+  * apply tag(s) to bunch of blobs, generally change some metadata
 
 ## Current Baseline
 

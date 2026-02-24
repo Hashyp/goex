@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 	"time"
 
@@ -323,74 +322,34 @@ func (b GCSBackend) EnumerateCopy(ctx context.Context, state Location, selected 
 		return nil, fmt.Errorf("gcs client not configured")
 	}
 
-	plan := make([]TransferPlanItem, 0, len(selected))
-	for _, entry := range selected {
-		switch gcsLocation.Mode {
-		case GCSModeBuckets:
-			if entry.Kind != KindGCSBucket || entry.Name == "" {
-				continue
-			}
-			objectNames, err := b.listObjectNamesByPrefix(ctx, entry.Name, "")
-			if err != nil {
-				return nil, err
-			}
-			for _, objectName := range objectNames {
-				srcRef := TransferObjectRef{
-					Provider: "gcs",
-					Scope:    entry.Name,
-					Path:     objectName,
-					Display:  "gcs:///" + entry.Name + "/" + objectName,
-				}
-				dstRef, err := resolveDestinationRef(destination, path.Join(entry.Name, objectName))
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			}
-		case GCSModeObjects:
-			if gcsLocation.Bucket == "" {
-				return nil, fmt.Errorf("gcs bucket not selected")
-			}
-			switch entry.Kind {
-			case KindObject:
-				objectKey := entry.FullPath
-				if objectKey == "" {
-					objectKey = joinObjectPath(gcsLocation.Prefix, entry.Name)
-				}
-				srcRef, err := sourceRefForLocation(gcsLocation, objectKey)
-				if err != nil {
-					return nil, err
-				}
-				dstRef, err := resolveDestinationRef(destination, entry.Name)
-				if err != nil {
-					return nil, err
-				}
-				plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-			case KindDirectory:
-				prefix := enterPrefix(entry.FullPath, gcsDelimiter)
-				objectNames, err := b.listObjectNamesByPrefix(ctx, gcsLocation.Bucket, prefix)
-				if err != nil {
-					return nil, err
-				}
-				for _, objectName := range objectNames {
-					rel := path.Join(entry.Name, trimPrefix(objectName, prefix))
-					srcRef, err := sourceRefForLocation(gcsLocation, objectName)
-					if err != nil {
-						return nil, err
-					}
-					dstRef, err := resolveDestinationRef(destination, rel)
-					if err != nil {
-						return nil, err
-					}
-					plan = append(plan, TransferPlanItem{Source: srcRef, Destination: dstRef})
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unknown gcs mode: %s", gcsLocation.Mode)
-		}
+	buildSource := func(scope string, objectPath string) (TransferObjectRef, error) {
+		return newTransferObjectRef("gcs", scope, objectPath)
 	}
-
-	return plan, nil
+	switch gcsLocation.Mode {
+	case GCSModeBuckets:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeRoot,
+			rootKind:     KindGCSBucket,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listObjectNamesByPrefix,
+			buildSource:  buildSource,
+		})
+	case GCSModeObjects:
+		return buildObjectStoreCopyPlan(ctx, objectStorePlannerConfig{
+			mode:         objectStorePlanModeObjects,
+			scopeLabel:   "gcs bucket",
+			scope:        gcsLocation.Bucket,
+			prefix:       gcsLocation.Prefix,
+			delimiter:    gcsDelimiter,
+			selected:     selected,
+			destination:  destination,
+			listByPrefix: b.listObjectNamesByPrefix,
+			buildSource:  buildSource,
+		})
+	default:
+		return nil, fmt.Errorf("unknown gcs mode: %s", gcsLocation.Mode)
+	}
 }
 
 func (b GCSBackend) OpenCopyReader(ctx context.Context, source TransferObjectRef) (CopyReadHandle, error) {

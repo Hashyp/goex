@@ -58,6 +58,14 @@ func copyProgressTickCmd() tea.Cmd {
 	})
 }
 
+func copyCommandContext(deadline time.Time) (context.Context, context.CancelFunc) {
+	if !deadline.IsZero() {
+		return context.WithDeadline(context.Background(), deadline)
+	}
+
+	return context.WithCancel(context.Background())
+}
+
 func (m *Model) startCopyProgress() []tea.Cmd {
 	sourcePane := m.paneByID(m.copyModal.sourcePane)
 	destinationPane := m.paneByID(m.copyModal.destinationPane)
@@ -97,13 +105,7 @@ func (m *Model) planCopyCmd() tea.Cmd {
 	deadline := m.copyModal.progress.deadline
 
 	return func() tea.Msg {
-		ctx := context.Background()
-		var cancel context.CancelFunc
-		if !deadline.IsZero() {
-			ctx, cancel = context.WithDeadline(ctx, deadline)
-		} else {
-			ctx, cancel = context.WithCancel(ctx)
-		}
+		ctx, cancel := copyCommandContext(deadline)
 		defer cancel()
 
 		enumerator, ok := sourcePane.backend.(CopyEnumerator)
@@ -142,13 +144,7 @@ func (m *Model) nextCopyStepCmd() tea.Cmd {
 	deadline := m.copyModal.progress.deadline
 
 	return func() tea.Msg {
-		ctx := context.Background()
-		var cancel context.CancelFunc
-		if !deadline.IsZero() {
-			ctx, cancel = context.WithDeadline(ctx, deadline)
-		} else {
-			ctx, cancel = context.WithCancel(ctx)
-		}
+		ctx, cancel := copyCommandContext(deadline)
 		defer cancel()
 
 		reader, ok := sourcePane.backend.(CopyReader)
