@@ -468,6 +468,17 @@ func (b S3Backend) OpenCopyWriter(ctx context.Context, destination TransferObjec
 	}, nil
 }
 
+func (b S3Backend) DeleteTransferSource(ctx context.Context, source TransferObjectRef) error {
+	if b.client == nil {
+		return fmt.Errorf("s3 client not configured")
+	}
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(source.Scope),
+		Key:    aws.String(source.Path),
+	})
+	return err
+}
+
 type pipeUploadWriteCloser struct {
 	pipe *io.PipeWriter
 	done <-chan error
