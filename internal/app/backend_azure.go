@@ -431,3 +431,15 @@ func (b AzureBlobBackend) OpenCopyWriter(ctx context.Context, destination Transf
 
 	return &pipeUploadWriteCloser{pipe: writer, done: done}, nil
 }
+
+func (b AzureBlobBackend) DeleteTransferSource(ctx context.Context, source TransferObjectRef) error {
+	if b.client == nil {
+		return fmt.Errorf("azure client not configured")
+	}
+	_, err := b.client.DeleteBlob(ctx, source.Scope, source.Path, nil)
+	if err != nil && !isAzureNotFoundError(err) {
+		return err
+	}
+
+	return nil
+}

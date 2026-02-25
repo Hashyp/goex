@@ -254,4 +254,19 @@ func (b LocalBackend) OpenCopyWriter(_ context.Context, destination TransferObje
 	return os.Create(destination.Path)
 }
 
+func (b LocalBackend) DeleteTransferSource(_ context.Context, source TransferObjectRef) error {
+	info, err := os.Stat(source.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if info.IsDir() {
+		return os.RemoveAll(source.Path)
+	}
+
+	return os.Remove(source.Path)
+}
+
 var ErrInvalidLocation = errors.New("invalid location type for backend")

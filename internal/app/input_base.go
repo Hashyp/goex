@@ -117,6 +117,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return m.handleCopyModalKey(msg)
 	}
 
+	if m.moveModal.visible {
+		return m.handleMoveModalKey(msg)
+	}
+
 	if m.deleteModal.visible {
 		return m.handleDeleteModalKey(msg)
 	}
@@ -159,6 +163,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 		return true, nil
 	case "c":
 		m.openCopyModal()
+		return true, nil
+	case "m":
+		m.openMoveModal()
 		return true, nil
 	case "n":
 		m.moveToSearchMatch(true)

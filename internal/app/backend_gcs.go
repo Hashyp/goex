@@ -391,3 +391,14 @@ func (b GCSBackend) OpenCopyWriter(ctx context.Context, destination TransferObje
 	}
 	return b.client.Bucket(destination.Scope).Object(destination.Path).NewWriter(ctx), nil
 }
+
+func (b GCSBackend) DeleteTransferSource(ctx context.Context, source TransferObjectRef) error {
+	if b.client == nil {
+		return fmt.Errorf("gcs client not configured")
+	}
+	err := b.client.Bucket(source.Scope).Object(source.Path).Delete(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return nil
+	}
+	return err
+}

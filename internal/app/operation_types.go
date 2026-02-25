@@ -9,6 +9,7 @@ type TransferOpType string
 
 const (
 	TransferOpCopy TransferOpType = "copy"
+	TransferOpMove TransferOpType = "move"
 )
 
 type TransferConflictPolicy string

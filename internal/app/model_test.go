@@ -778,6 +778,75 @@ func TestCopyConfirmCopiesHighlightedFileToOppositePane(t *testing.T) {
 	}
 }
 
+func TestMoveModalCancelsOnEsc(t *testing.T) {
+	src := t.TempDir()
+	sourcePath := filepath.Join(src, "alpha.txt")
+	if err := os.WriteFile(sourcePath, []byte("alpha"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	dst := t.TempDir()
+
+	model := initModel(t, NewModelWithBackends(
+		NewLocalBackend(OSFileSystem{}, src),
+		NewLocalBackend(OSFileSystem{}, dst),
+	))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	if !model.moveModal.visible {
+		t.Fatal("expected move modal to open")
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.moveModal.visible {
+		t.Fatal("expected move modal to close on escape")
+	}
+	if _, err := os.Stat(sourcePath); err != nil {
+		t.Fatalf("expected source file to remain after cancel: %v", err)
+	}
+}
+
+func TestMoveConfirmMovesHighlightedFileToOppositePane(t *testing.T) {
+	src := t.TempDir()
+	sourcePath := filepath.Join(src, "alpha.txt")
+	if err := os.WriteFile(sourcePath, []byte("alpha"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	dst := t.TempDir()
+
+	model := initModel(t, NewModelWithBackends(
+		NewLocalBackend(OSFileSystem{}, src),
+		NewLocalBackend(OSFileSystem{}, dst),
+	))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if !model.moveModal.visible {
+		t.Fatal("expected move result modal to remain visible")
+	}
+	if !model.moveModal.hasResult {
+		t.Fatal("expected move result state after confirmation")
+	}
+	if len(model.moveModal.result.Copied) != 1 {
+		t.Fatalf("expected one moved item, got %d", len(model.moveModal.result.Copied))
+	}
+
+	movedPath := filepath.Join(dst, "alpha.txt")
+	got, err := os.ReadFile(movedPath)
+	if err != nil {
+		t.Fatalf("read moved file: %v", err)
+	}
+	if string(got) != "alpha" {
+		t.Fatalf("unexpected moved file contents: %q", string(got))
+	}
+	if _, err := os.Stat(sourcePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected source file removed after move, stat err=%v", err)
+	}
+
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.moveModal.visible {
+		t.Fatal("expected move modal to close after result acknowledgment")
+	}
+}
+
 func visibleNames(rows []table.Row) []string {
 	names := make([]string, 0, len(rows))
 	for _, row := range rows {

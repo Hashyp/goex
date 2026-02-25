@@ -31,3 +31,8 @@ type CopyWriter interface {
 	CopyDestinationExists(ctx context.Context, destination TransferObjectRef) (bool, error)
 	OpenCopyWriter(ctx context.Context, destination TransferObjectRef, metadata TransferObjectMetadata) (io.WriteCloser, error)
 }
+
+// CopySourceDeleter removes already-copied source objects for move operations.
+type CopySourceDeleter interface {
+	DeleteTransferSource(ctx context.Context, source TransferObjectRef) error
+}
