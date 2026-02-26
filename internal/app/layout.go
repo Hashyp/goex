@@ -19,9 +19,12 @@ func (m *Model) applyLayout() {
 
 	paneWidth := max(30, m.width/2)
 	paneHeight := m.paneHeight()
+	pageSize := max(1, paneHeight-6)
 
 	m.leftPane.table = table.Model.WithTargetWidth(m.leftPane.table, paneWidth)
 	m.rightPane.table = table.Model.WithTargetWidth(m.rightPane.table, paneWidth)
 	m.leftPane.table = m.leftPane.table.WithMinimumHeight(paneHeight)
 	m.rightPane.table = m.rightPane.table.WithMinimumHeight(paneHeight)
+	m.leftPane.table = m.leftPane.table.WithPageSize(pageSize)
+	m.rightPane.table = m.rightPane.table.WithPageSize(pageSize)
 }

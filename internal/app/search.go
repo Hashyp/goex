@@ -87,8 +87,8 @@ func (p *Pane) rebuildMatchIndexes() {
 		return
 	}
 
-	for index, row := range p.table.GetVisibleRows() {
-		if hasNonEmptyRegexMatch(p.searchRegex, rowNameFromData(row.Data)) {
+	for index, entry := range p.entries {
+		if hasNonEmptyRegexMatch(p.searchRegex, entry.Name) {
 			p.matchIndexes = append(p.matchIndexes, index)
 		}
 	}
