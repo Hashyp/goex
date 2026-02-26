@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -42,6 +43,26 @@ type deleteStepMsg struct {
 type deleteProgressTickMsg struct{}
 type copyProgressTickMsg struct{}
 type moveProgressTickMsg struct{}
+type editorOpenFailedMsg struct {
+	err error
+}
+
+type editorPreparedMsg struct {
+	session externalEditSession
+	cmd     *exec.Cmd
+}
+
+type editorProcessDoneMsg struct {
+	session externalEditSession
+	err     error
+}
+
+type editorSyncDoneMsg struct {
+	pane     activePane
+	entry    string
+	uploaded bool
+	err      error
+}
 
 type deleteFailure struct {
 	name string
@@ -156,6 +177,8 @@ type Model struct {
 	pickerModalVisible bool
 	pickerTargetPane   activePane
 	pickerChoiceIndex  int
+	execProcess        func(*exec.Cmd, tea.ExecCallback) tea.Cmd
+	editorCommand      func(path string) (*exec.Cmd, error)
 }
 
 func NewModel() Model {
@@ -248,6 +271,8 @@ func NewModelWithBackends(leftBackend PaneBackend, rightBackend PaneBackend) Mod
 		pickerModalVisible: false,
 		pickerTargetPane:   paneLeft,
 		pickerChoiceIndex:  0,
+		execProcess:        tea.ExecProcess,
+		editorCommand:      buildEditorCommand,
 	}
 
 	model.setActivePane(paneLeft)
@@ -498,6 +523,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveModal.progress.frame++
 			cmds = append(cmds, moveProgressTickCmd())
 		}
+	case editorOpenFailedMsg:
+		m.status = fmt.Sprintf("Open failed: %v", typed.err)
+	case editorPreparedMsg:
+		if typed.cmd == nil {
+			break
+		}
+		m.status = fmt.Sprintf("Opening %q...", typed.session.entryName)
+		cmds = append(cmds, m.execEditorProcessCmd(typed.cmd, func(err error) tea.Msg {
+			return editorProcessDoneMsg{
+				session: typed.session,
+				err:     err,
+			}
+		}))
+	case editorProcessDoneMsg:
+		if typed.err != nil {
+			cmds = append(cmds, m.cleanupTempOpenFileCmd(typed.session))
+			m.status = fmt.Sprintf("Open failed for %q: %v", typed.session.entryName, typed.err)
+			break
+		}
+		cmds = append(cmds, m.syncOpenFileChangesCmd(typed.session))
+	case editorSyncDoneMsg:
+		if typed.err != nil {
+			m.status = fmt.Sprintf("Open sync failed for %q: %v", typed.entry, typed.err)
+			break
+		}
+		if typed.uploaded {
+			m.status = fmt.Sprintf("Saved changes to %q", typed.entry)
+			cmds = append(cmds, m.paneByID(typed.pane).beginLoad(typed.pane))
+			break
+		}
+		m.status = ""
 	case tea.KeyMsg:
 		handled, keyCmds := m.handleKey(typed)
 		cmds = append(cmds, keyCmds...)

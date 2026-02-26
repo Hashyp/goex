@@ -49,7 +49,10 @@ See `docs/gcs-emulator.md` for usage details.
 ## S3 Right Pane Behavior
 
 - Starts at S3 bucket list (`s3:///`).
-- `Enter` / `l`: enter bucket or virtual folder.
+- `Enter`: enter bucket or virtual folder; opens highlighted file/object in `$GOEX_EDITOR` or `$EDITOR`.
+- `l`: enter bucket or virtual folder.
+- `o`: open highlighted file/object in `$GOEX_EDITOR` or `$EDITOR`.
+- On local executable files, `Enter` skips opening to avoid accidental editor lock-in; use `o` explicitly.
 - `Backspace` / `h`: parent folder; from bucket root goes back to bucket list.
 - `.` toggles hidden entries for active pane.
 - `d` opens delete confirmation for selected files/objects (or highlighted file/object when none selected).

@@ -50,7 +50,6 @@ func createTable(rows []table.Row, theme appTheme, selected map[string]bool) tab
 			Border(customBorder).
 			WithKeyMap(keys).
 			WithStaticFooter("Footer!").
-			WithNoPagination().
 			WithBaseStyle(lipgloss.NewStyle().Align(lipgloss.Left)),
 		theme,
 		selected,

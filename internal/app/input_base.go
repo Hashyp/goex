@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -80,7 +79,7 @@ func (m *Model) updateActiveTable(msg tea.Msg) []tea.Cmd {
 
 func (m *Model) jumpToLastRow() {
 	active := m.activePaneRef()
-	lastIndex := len(active.table.GetVisibleRows()) - 1
+	lastIndex := active.table.TotalRows() - 1
 	if lastIndex < 0 {
 		return
 	}
@@ -95,7 +94,7 @@ func (m *Model) selectHighlightedAndAdvance() {
 	}
 
 	currentIndex := active.table.GetHighlightedRowIndex()
-	lastIndex := len(active.table.GetVisibleRows()) - 1
+	lastIndex := active.table.TotalRows() - 1
 	nextIndex := currentIndex + 1
 	if nextIndex > lastIndex {
 		nextIndex = lastIndex
@@ -167,6 +166,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 	case "m":
 		m.openMoveModal()
 		return true, nil
+	case "o":
+		return true, []tea.Cmd{m.openHighlightedInEditor()}
 	case "n":
 		m.moveToSearchMatch(true)
 		return true, nil
@@ -176,17 +177,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (handled bool, cmds []tea.Cmd) {
 	case "G", "shift+g", "end":
 		m.jumpToLastRow()
 		return true, nil
-	case "enter", "l":
-		changed, err := m.activePaneRef().enterHighlighted(context.Background())
-		if err != nil {
-			m.status = err.Error()
-			return true, nil
-		}
-		if changed {
-			return true, []tea.Cmd{m.reloadActivePane()}
-		}
-		m.status = ""
-		return true, nil
+	case "enter":
+		return true, []tea.Cmd{m.enterOrOpenHighlighted()}
+	case "l":
+		return true, []tea.Cmd{m.enterHighlightedDirOnly()}
 	case "backspace", "h":
 		if changed := m.activePaneRef().goParent(); changed {
 			m.status = ""

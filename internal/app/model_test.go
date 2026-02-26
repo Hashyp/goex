@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -60,6 +61,16 @@ func runCmd(t *testing.T, model Model, cmd tea.Cmd) Model {
 
 func initModel(t *testing.T, model Model) Model {
 	t.Helper()
+	if model.execProcess == nil {
+		model.execProcess = func(_ *exec.Cmd, callback tea.ExecCallback) tea.Cmd {
+			return func() tea.Msg { return callback(nil) }
+		}
+	}
+	if model.editorCommand == nil {
+		model.editorCommand = func(path string) (*exec.Cmd, error) {
+			return exec.Command("true", path), nil
+		}
+	}
 	return runCmd(t, model, model.Init())
 }
 
@@ -138,17 +149,65 @@ func TestEnterAndParentNavigationOnFocusedPane(t *testing.T) {
 	}
 }
 
-func TestEnterOnFileDoesNotChangePath(t *testing.T) {
+func TestEnterOnFileOpensEditorAndDoesNotChangePath(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "a_file.txt"), []byte("x"), 0o644); err != nil {
+	filePath := filepath.Join(root, "a_file.txt")
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 
-	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	var openedPath string
+	model := NewModelWithFS(OSFileSystem{}, root)
+	model.editorCommand = func(path string) (*exec.Cmd, error) {
+		openedPath = path
+		return exec.Command("true", path), nil
+	}
+	model = initModel(t, model)
 	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.leftPane.path != root {
 		t.Fatalf("expected path unchanged at %q, got %q", root, model.leftPane.path)
+	}
+	if openedPath != filePath {
+		t.Fatalf("expected editor to open %q, got %q", filePath, openedPath)
+	}
+}
+
+func TestOpenKeyOnDirectoryShowsStatusHint(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "a_dir"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	model := initModel(t, NewModelWithFS(OSFileSystem{}, root))
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+
+	if model.status != "Open: highlight a file/object" {
+		t.Fatalf("unexpected status for directory open: %q", model.status)
+	}
+}
+
+func TestEnterSkipsExecutableFileAndDoesNotLaunchEditor(t *testing.T) {
+	root := t.TempDir()
+	execPath := filepath.Join(root, "tool")
+	if err := os.WriteFile(execPath, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+		t.Fatalf("write executable: %v", err)
+	}
+
+	opened := false
+	model := NewModelWithFS(OSFileSystem{}, root)
+	model.editorCommand = func(path string) (*exec.Cmd, error) {
+		opened = true
+		return exec.Command("true", path), nil
+	}
+	model = initModel(t, model)
+	model = pressKey(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if opened {
+		t.Fatal("expected editor not to be launched for enter on executable")
+	}
+	if model.status != "Enter: executable file skipped (use o to open)" {
+		t.Fatalf("unexpected status: %q", model.status)
 	}
 }
 

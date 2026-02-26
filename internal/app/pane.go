@@ -311,8 +311,8 @@ func (p *Pane) highlightByName(name string) {
 		return
 	}
 
-	for index, row := range p.table.GetVisibleRows() {
-		if rowNameFromData(row.Data) == name {
+	for index, entry := range p.entries {
+		if entry.Name == name {
 			p.table = p.table.WithHighlightedRow(index)
 			return
 		}

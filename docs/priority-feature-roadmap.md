@@ -4,8 +4,11 @@ This roadmap translates the requested feature order into implementation mileston
 
 Priority order (fixed):
 1. Copy between panes
+  * should be file type aware and set correct mime-type when uploading to cloud storages
 2. Move between panes
+  * should be file type aware and set correct mime-type when uploading to cloud storages
 3. File preview/open
+  * saving file previewed from cloud storage should re-upload
 4. Filtering with regex support
 5. Diff between folders/files
 6. Rename file/folder/bucket/container
@@ -16,6 +19,7 @@ Priority order (fixed):
 11. Applying shell script when renaming!
 12. Batch operations may be BIG WIN overall for cloud specific operations:
   * apply tag(s) to bunch of blobs, generally change some metadata
+13. Copy and Move should be file type aware and set correct mime-type when uploading to cloud storages
 
 ## Current Baseline
 
@@ -116,9 +120,9 @@ Goal: improve inspection and in-place organization workflows.
 ### Task Breakdown
 
 1. Preview/Open
-- Add preview modal with scroll support.
-- Add max preview size and binary detection.
-- Add external open command hook.
+- Use system editor as default open flow (`o` and `Enter` on files/objects).
+- Keep `Enter` navigation for directory-like entries (dirs/prefixes/buckets/containers).
+- For cloud backends, download object to temp file, open in editor, and sync changes back on close.
 
 2. Regex filtering
 - Add dedicated filter input mode and filtered row set.
